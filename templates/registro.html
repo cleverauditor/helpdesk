@@ -36,10 +36,15 @@
 
                     <div class="mb-3">
                         <label class="form-label">Tipo de Usuário</label>
-                        <select name="tipo" class="form-select">
+                        <select name="tipo" class="form-select" id="tipoUsuario" onchange="toggleEmpresa()">
                             <option value="cliente_externo">Cliente Externo</option>
                             <option value="cliente_interno">Cliente Interno (Funcionário)</option>
                         </select>
+                    </div>
+
+                    <div class="mb-3" id="campoEmpresa">
+                        <label class="form-label">Empresa *</label>
+                        <input type="text" name="empresa" class="form-control" id="inputEmpresa">
                     </div>
 
                     <div class="mb-3">
@@ -66,4 +71,24 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleEmpresa() {
+    const tipo = document.getElementById('tipoUsuario').value;
+    const campo = document.getElementById('campoEmpresa');
+    const input = document.getElementById('inputEmpresa');
+
+    if (tipo === 'cliente_externo') {
+        campo.style.display = 'block';
+        input.required = true;
+    } else {
+        campo.style.display = 'none';
+        input.required = false;
+        input.value = '';
+    }
+}
+toggleEmpresa();
+</script>
 {% endblock %}

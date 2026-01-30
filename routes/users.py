@@ -56,6 +56,7 @@ def criar():
         email = request.form.get('email', '').strip().lower()
         senha = request.form.get('senha', '')
         tipo = request.form.get('tipo', 'cliente_externo')
+        empresa = request.form.get('empresa', '').strip()
         departamento = request.form.get('departamento', '').strip()
         telefone = request.form.get('telefone', '').strip()
 
@@ -79,6 +80,7 @@ def criar():
             nome=nome,
             email=email,
             tipo=tipo,
+            empresa=empresa if tipo == 'cliente_externo' else None,
             departamento=departamento,
             telefone=telefone
         )
@@ -102,6 +104,7 @@ def editar(id):
     if request.method == 'POST':
         user.nome = request.form.get('nome', '').strip()
         user.tipo = request.form.get('tipo', user.tipo)
+        user.empresa = request.form.get('empresa', '').strip() if user.tipo == 'cliente_externo' else None
         user.departamento = request.form.get('departamento', '').strip()
         user.telefone = request.form.get('telefone', '').strip()
         user.ativo = request.form.get('ativo') == '1'

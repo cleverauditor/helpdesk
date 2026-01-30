@@ -37,7 +37,7 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Tipo *</label>
-                            <select name="tipo" class="form-select" required>
+                            <select name="tipo" class="form-select" id="tipoUsuario" required onchange="toggleEmpresa()">
                                 <option value="cliente_externo"
                                         {% if user and user.tipo == 'cliente_externo' %}selected{% endif %}>
                                     Cliente Externo
@@ -56,19 +56,27 @@
                                 </option>
                             </select>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Departamento</label>
-                            <input type="text" name="departamento" class="form-control"
-                                   value="{{ user.departamento if user else '' }}">
+                        <div class="col-md-6 mb-3" id="campoEmpresa">
+                            <label class="form-label">Empresa</label>
+                            <input type="text" name="empresa" class="form-control" id="inputEmpresa"
+                                   value="{{ user.empresa if user else '' }}">
                         </div>
                     </div>
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
+                            <label class="form-label">Departamento</label>
+                            <input type="text" name="departamento" class="form-control"
+                                   value="{{ user.departamento if user else '' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
                             <label class="form-label">Telefone</label>
                             <input type="text" name="telefone" class="form-control"
                                    value="{{ user.telefone if user else '' }}">
                         </div>
+                    </div>
+
+                    <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Senha {% if not user %}*{% endif %}</label>
                             <input type="password" name="senha" class="form-control"
@@ -132,4 +140,20 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleEmpresa() {
+    const tipo = document.getElementById('tipoUsuario').value;
+    const campo = document.getElementById('campoEmpresa');
+
+    if (tipo === 'cliente_externo') {
+        campo.style.display = 'block';
+    } else {
+        campo.style.display = 'none';
+    }
+}
+toggleEmpresa();
+</script>
 {% endblock %}

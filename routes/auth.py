@@ -50,6 +50,7 @@ def registro():
         senha = request.form.get('senha', '')
         confirmar_senha = request.form.get('confirmar_senha', '')
         tipo = request.form.get('tipo', 'cliente_externo')
+        empresa = request.form.get('empresa', '').strip()
 
         # Validações
         errors = []
@@ -65,6 +66,8 @@ def registro():
             errors.append('Este email já está cadastrado.')
         if tipo not in ['cliente_interno', 'cliente_externo']:
             tipo = 'cliente_externo'
+        if tipo == 'cliente_externo' and not empresa:
+            errors.append('Empresa é obrigatória para clientes externos.')
 
         if errors:
             for error in errors:
@@ -75,6 +78,7 @@ def registro():
             nome=nome,
             email=email,
             tipo=tipo,
+            empresa=empresa if tipo == 'cliente_externo' else None,
             departamento=request.form.get('departamento', '').strip(),
             telefone=request.form.get('telefone', '').strip()
         )

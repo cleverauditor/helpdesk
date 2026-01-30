@@ -111,6 +111,7 @@ class User(UserMixin, db.Model):
     senha_hash = db.Column(db.String(256), nullable=False)
     tipo = db.Column(db.String(20), nullable=False, default='cliente_externo')
     # tipos: admin, atendente, cliente_interno, cliente_externo
+    empresa = db.Column(db.String(150))  # Para clientes externos
     departamento = db.Column(db.String(100))
     telefone = db.Column(db.String(20))
     ativo = db.Column(db.Boolean, default=True)

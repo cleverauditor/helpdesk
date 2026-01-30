@@ -27,10 +27,18 @@ def atendente_required(f):
 def index():
     atendentes = User.query.filter(User.tipo.in_(['admin', 'atendente'])).all()
     categorias = Category.query.filter_by(ativo=True).all()
+    # Lista de empresas únicas dos clientes externos
+    empresas = db.session.query(User.empresa).filter(
+        User.tipo == 'cliente_externo',
+        User.empresa.isnot(None),
+        User.empresa != ''
+    ).distinct().order_by(User.empresa).all()
+    empresas = [e[0] for e in empresas]
 
     return render_template('reports/index.html',
                           atendentes=atendentes,
-                          categorias=categorias)
+                          categorias=categorias,
+                          empresas=empresas)
 
 
 @reports_bp.route('/gerar', methods=['POST'])
@@ -44,6 +52,7 @@ def gerar():
     prioridade = request.form.get('prioridade')
     atendente_id = request.form.get('atendente_id', type=int)
     categoria_id = request.form.get('categoria_id', type=int)
+    empresa = request.form.get('empresa', '').strip()
 
     query = Ticket.query
 
@@ -59,6 +68,11 @@ def gerar():
         query = query.filter(Ticket.atendente_id == atendente_id)
     if categoria_id:
         query = query.filter(Ticket.categoria_id == categoria_id)
+    if empresa:
+        # Filtrar por empresa do cliente
+        clientes_empresa = User.query.filter(User.empresa == empresa).all()
+        cliente_ids = [c.id for c in clientes_empresa]
+        query = query.filter(Ticket.cliente_id.in_(cliente_ids))
 
     tickets = query.order_by(Ticket.criado_em.desc()).all()
 
@@ -67,19 +81,28 @@ def gerar():
 
     atendentes = User.query.filter(User.tipo.in_(['admin', 'atendente'])).all()
     categorias = Category.query.filter_by(ativo=True).all()
+    # Lista de empresas
+    empresas = db.session.query(User.empresa).filter(
+        User.tipo == 'cliente_externo',
+        User.empresa.isnot(None),
+        User.empresa != ''
+    ).distinct().order_by(User.empresa).all()
+    empresas = [e[0] for e in empresas]
 
     return render_template('reports/index.html',
                           tickets=tickets,
                           metricas=metricas,
                           atendentes=atendentes,
                           categorias=categorias,
+                          empresas=empresas,
                           filtros={
                               'data_inicio': data_inicio,
                               'data_fim': data_fim,
                               'status': status,
                               'prioridade': prioridade,
                               'atendente_id': atendente_id,
-                              'categoria_id': categoria_id
+                              'categoria_id': categoria_id,
+                              'empresa': empresa
                           })
 
 
@@ -150,6 +173,7 @@ def exportar_csv():
     prioridade = request.form.get('prioridade')
     atendente_id = request.form.get('atendente_id', type=int)
     categoria_id = request.form.get('categoria_id', type=int)
+    empresa = request.form.get('empresa', '').strip()
 
     query = Ticket.query
 
@@ -165,6 +189,10 @@ def exportar_csv():
         query = query.filter(Ticket.atendente_id == atendente_id)
     if categoria_id:
         query = query.filter(Ticket.categoria_id == categoria_id)
+    if empresa:
+        clientes_empresa = User.query.filter(User.empresa == empresa).all()
+        cliente_ids = [c.id for c in clientes_empresa]
+        query = query.filter(Ticket.cliente_id.in_(cliente_ids))
 
     tickets = query.order_by(Ticket.criado_em.desc()).all()
 
@@ -175,7 +203,7 @@ def exportar_csv():
     # Header
     writer.writerow([
         'ID', 'Título', 'Status', 'Prioridade', 'Categoria',
-        'Cliente', 'Atendente', 'Criado em', 'Resolvido em',
+        'Cliente', 'Empresa', 'Atendente', 'Criado em', 'Resolvido em',
         'SLA Limite', 'SLA Status', 'Tempo Atendimento (min)'
     ])
 
@@ -188,6 +216,7 @@ def exportar_csv():
             ticket.prioridade,
             ticket.categoria.nome if ticket.categoria else '',
             ticket.cliente.nome,
+            ticket.cliente.empresa if ticket.cliente.empresa else '',
             ticket.atendente.nome if ticket.atendente else '',
             ticket.criado_em.strftime('%d/%m/%Y %H:%M') if ticket.criado_em else '',
             ticket.resolvido_em.strftime('%d/%m/%Y %H:%M') if ticket.resolvido_em else '',

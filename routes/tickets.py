@@ -93,7 +93,7 @@ def criar():
             prioridade=prioridade,
             categoria_id=categoria_id if categoria_id else None,
             cliente_id=current_user.id,
-            criado_em=datetime.utcnow()
+            criado_em=datetime.now()
         )
         ticket.calcular_sla()
 
@@ -180,9 +180,9 @@ def editar(id):
                 ticket.status = new_status
 
                 if new_status == 'resolvido' and not ticket.resolvido_em:
-                    ticket.resolvido_em = datetime.utcnow()
+                    ticket.resolvido_em = datetime.now()
                 elif new_status == 'fechado' and not ticket.fechado_em:
-                    ticket.fechado_em = datetime.utcnow()
+                    ticket.fechado_em = datetime.now()
 
                 # Notificar cliente
                 notify_status_update(ticket, old_status)
@@ -231,7 +231,7 @@ def atribuir(id):
 
         # Primeira resposta
         if not ticket.primeira_resposta_em:
-            ticket.primeira_resposta_em = datetime.utcnow()
+            ticket.primeira_resposta_em = datetime.now()
 
         # Histórico
         historico = TicketHistory(
@@ -323,9 +323,9 @@ def alterar_status(id):
         ticket.status = new_status
 
         if new_status == 'resolvido' and not ticket.resolvido_em:
-            ticket.resolvido_em = datetime.utcnow()
+            ticket.resolvido_em = datetime.now()
         elif new_status == 'fechado' and not ticket.fechado_em:
-            ticket.fechado_em = datetime.utcnow()
+            ticket.fechado_em = datetime.now()
 
         historico = TicketHistory(
             ticket_id=ticket.id,

@@ -63,8 +63,11 @@ def lista():
             )
 
     # Ordenar por SLA (mais urgentes primeiro), NULL por último
+    # Usando COALESCE para compatibilidade com MySQL (não suporta NULLS LAST)
+    from sqlalchemy import case
     tickets = query.order_by(
-        Ticket.sla_resolucao_limite.asc().nullslast()
+        case((Ticket.sla_resolucao_limite.is_(None), 1), else_=0),
+        Ticket.sla_resolucao_limite.asc()
     ).paginate(
         page=page, per_page=per_page, error_out=False
     )

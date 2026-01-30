@@ -79,11 +79,11 @@ def stats_por_status():
     labels = []
     data = []
     colors = {
-        'aberto': '#0d6efd',
+        'aberto': '#f7941d',
         'em_andamento': '#ffc107',
-        'aguardando': '#6c757d',
+        'aguardando': '#58595b',
         'resolvido': '#198754',
-        'fechado': '#6610f2'
+        'fechado': '#333333'
     }
 
     for status, count in resultado:

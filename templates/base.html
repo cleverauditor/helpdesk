@@ -9,6 +9,10 @@
     <style>
         :root {
             --sidebar-width: 250px;
+            --maxsim-orange: #f7941d;
+            --maxsim-gray: #58595b;
+            --maxsim-light-gray: #9d9d9c;
+            --maxsim-dark: #333333;
         }
         body {
             min-height: 100vh;
@@ -16,7 +20,7 @@
         .sidebar {
             width: var(--sidebar-width);
             min-height: 100vh;
-            background: #212529;
+            background: var(--maxsim-dark);
             position: fixed;
             left: 0;
             top: 0;
@@ -25,11 +29,17 @@
             color: rgba(255,255,255,.75);
             padding: 12px 20px;
             border-radius: 0;
+            border-left: 3px solid transparent;
         }
-        .sidebar .nav-link:hover,
-        .sidebar .nav-link.active {
+        .sidebar .nav-link:hover {
             color: #fff;
             background: rgba(255,255,255,.1);
+            border-left-color: var(--maxsim-light-gray);
+        }
+        .sidebar .nav-link.active {
+            color: #fff;
+            background: rgba(247, 148, 29, 0.15);
+            border-left-color: var(--maxsim-orange);
         }
         .sidebar .nav-link i {
             margin-right: 10px;
@@ -39,11 +49,20 @@
             padding: 20px;
         }
         .sidebar-brand {
-            padding: 20px;
-            color: #fff;
-            font-size: 1.25rem;
-            font-weight: bold;
+            padding: 15px;
+            text-align: center;
             border-bottom: 1px solid rgba(255,255,255,.1);
+        }
+        .sidebar-brand img {
+            max-width: 180px;
+            height: auto;
+        }
+        .sidebar-brand small {
+            display: block;
+            color: var(--maxsim-orange);
+            font-size: 0.75rem;
+            margin-top: 5px;
+            letter-spacing: 1px;
         }
         .sidebar-footer {
             position: absolute;
@@ -52,15 +71,37 @@
             padding: 15px;
             border-top: 1px solid rgba(255,255,255,.1);
         }
+        .btn-primary {
+            background-color: var(--maxsim-orange);
+            border-color: var(--maxsim-orange);
+        }
+        .btn-primary:hover {
+            background-color: #e8860a;
+            border-color: #e8860a;
+        }
+        .btn-outline-primary {
+            color: var(--maxsim-orange);
+            border-color: var(--maxsim-orange);
+        }
+        .btn-outline-primary:hover {
+            background-color: var(--maxsim-orange);
+            border-color: var(--maxsim-orange);
+        }
+        a {
+            color: var(--maxsim-orange);
+        }
+        a:hover {
+            color: #e8860a;
+        }
         .badge-prioridade-critica { background-color: #dc3545; }
-        .badge-prioridade-alta { background-color: #fd7e14; }
+        .badge-prioridade-alta { background-color: var(--maxsim-orange); }
         .badge-prioridade-media { background-color: #ffc107; color: #000; }
         .badge-prioridade-baixa { background-color: #198754; }
-        .badge-status-aberto { background-color: #0d6efd; }
+        .badge-status-aberto { background-color: var(--maxsim-orange); }
         .badge-status-em_andamento { background-color: #ffc107; color: #000; }
-        .badge-status-aguardando { background-color: #6c757d; }
+        .badge-status-aguardando { background-color: var(--maxsim-gray); }
         .badge-status-resolvido { background-color: #198754; }
-        .badge-status-fechado { background-color: #6610f2; }
+        .badge-status-fechado { background-color: var(--maxsim-dark); }
         .sla-ok { color: #198754; }
         .sla-risco { color: #ffc107; }
         .sla-violado { color: #dc3545; }
@@ -96,8 +137,17 @@
             width: 18px;
             height: 18px;
             border-radius: 50%;
-            background: #0d6efd;
+            background: var(--maxsim-orange);
             border: 3px solid #fff;
+        }
+        .text-primary {
+            color: var(--maxsim-orange) !important;
+        }
+        .bg-primary {
+            background-color: var(--maxsim-orange) !important;
+        }
+        .border-primary {
+            border-color: var(--maxsim-orange) !important;
         }
         @media (max-width: 768px) {
             .sidebar {
@@ -116,7 +166,8 @@
     {% if current_user.is_authenticated %}
     <nav class="sidebar">
         <div class="sidebar-brand">
-            <i class="bi bi-headset"></i> Helpdesk
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Maxsim">
+            <small>HELPDESK</small>
         </div>
         <ul class="nav flex-column mt-3">
             <li class="nav-item">

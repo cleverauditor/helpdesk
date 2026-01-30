@@ -51,6 +51,8 @@ def lista():
 @login_required
 @admin_required
 def criar():
+    categorias = Category.query.filter_by(ativo=True).order_by(Category.nome).all()
+
     if request.method == 'POST':
         nome = request.form.get('nome', '').strip()
         email = request.form.get('email', '').strip().lower()
@@ -74,7 +76,7 @@ def criar():
         if errors:
             for error in errors:
                 flash(error, 'danger')
-            return render_template('users/form.html', user=None)
+            return render_template('users/form.html', user=None, categorias=categorias)
 
         user = User(
             nome=nome,
@@ -87,12 +89,22 @@ def criar():
         user.set_senha(senha)
 
         db.session.add(user)
+        db.session.flush()
+
+        # Adicionar categorias do atendente
+        if tipo in ['admin', 'atendente']:
+            categorias_ids = request.form.getlist('categorias', type=int)
+            for cat_id in categorias_ids:
+                categoria = Category.query.get(cat_id)
+                if categoria:
+                    user.categorias.append(categoria)
+
         db.session.commit()
 
         flash(f'Usuário {nome} criado com sucesso!', 'success')
         return redirect(url_for('users.lista'))
 
-    return render_template('users/form.html', user=None)
+    return render_template('users/form.html', user=None, categorias=categorias)
 
 
 @users_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
@@ -100,6 +112,7 @@ def criar():
 @admin_required
 def editar(id):
     user = User.query.get_or_404(id)
+    categorias = Category.query.filter_by(ativo=True).order_by(Category.nome).all()
 
     if request.method == 'POST':
         user.nome = request.form.get('nome', '').strip()
@@ -113,12 +126,23 @@ def editar(id):
         if nova_senha and len(nova_senha) >= 6:
             user.set_senha(nova_senha)
 
+        # Atualizar categorias do atendente
+        if user.tipo in ['admin', 'atendente']:
+            categorias_ids = request.form.getlist('categorias', type=int)
+            # Limpar categorias atuais
+            user.categorias = []
+            # Adicionar novas
+            for cat_id in categorias_ids:
+                categoria = Category.query.get(cat_id)
+                if categoria:
+                    user.categorias.append(categoria)
+
         db.session.commit()
 
         flash(f'Usuário {user.nome} atualizado!', 'success')
         return redirect(url_for('users.lista'))
 
-    return render_template('users/form.html', user=user)
+    return render_template('users/form.html', user=user, categorias=categorias)
 
 
 @users_bp.route('/<int:id>/toggle', methods=['POST'])

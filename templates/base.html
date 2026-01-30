@@ -103,8 +103,7 @@
         .badge-prioridade-baixa { background-color: #198754; }
         .badge-status-aberto { background-color: var(--maxsim-orange); }
         .badge-status-em_andamento { background-color: #ffc107; color: #000; }
-        .badge-status-aguardando { background-color: var(--maxsim-gray); }
-        .badge-status-resolvido { background-color: #198754; }
+        .badge-status-fechado { background-color: #198754; }
         .badge-status-fechado { background-color: var(--maxsim-dark); }
         .sla-ok { color: #198754; }
         .sla-risco { color: #ffc107; }
@@ -186,13 +185,11 @@
                     <i class="bi bi-ticket-detailed"></i> Chamados
                 </a>
             </li>
-            {% if current_user.is_atendente() %}
             <li class="nav-item">
                 <a class="nav-link {% if 'reports' in request.endpoint %}active{% endif %}" href="{{ url_for('reports.index') }}">
-                    <i class="bi bi-file-earmark-bar-graph"></i> Relatórios
+                    <i class="bi bi-file-earmark-bar-graph"></i> {% if current_user.is_cliente() %}Meus Relatórios{% else %}Relatórios{% endif %}
                 </a>
             </li>
-            {% endif %}
             {% if current_user.is_admin() %}
             <li class="nav-item">
                 <a class="nav-link {% if request.endpoint == 'users.lista' %}active{% endif %}" href="{{ url_for('users.lista') }}">

@@ -4,7 +4,13 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="bi bi-file-earmark-bar-graph"></i> Relatórios</h2>
+    <h2><i class="bi bi-file-earmark-bar-graph"></i>
+        {% if current_user.is_cliente() %}
+        Meus Relatórios
+        {% else %}
+        Relatórios
+        {% endif %}
+    </h2>
 </div>
 
 <!-- Filtros -->
@@ -31,8 +37,6 @@
                         <option value="">Todos</option>
                         <option value="aberto" {% if filtros and filtros.status == 'aberto' %}selected{% endif %}>Aberto</option>
                         <option value="em_andamento" {% if filtros and filtros.status == 'em_andamento' %}selected{% endif %}>Em Andamento</option>
-                        <option value="aguardando" {% if filtros and filtros.status == 'aguardando' %}selected{% endif %}>Aguardando</option>
-                        <option value="resolvido" {% if filtros and filtros.status == 'resolvido' %}selected{% endif %}>Resolvido</option>
                         <option value="fechado" {% if filtros and filtros.status == 'fechado' %}selected{% endif %}>Fechado</option>
                     </select>
                 </div>
@@ -46,6 +50,7 @@
                         <option value="baixa" {% if filtros and filtros.prioridade == 'baixa' %}selected{% endif %}>Baixa</option>
                     </select>
                 </div>
+                {% if current_user.is_admin() and atendentes %}
                 <div class="col-md-2">
                     <label class="form-label">Atendente</label>
                     <select name="atendente_id" class="form-select">
@@ -58,6 +63,8 @@
                         {% endfor %}
                     </select>
                 </div>
+                {% endif %}
+                {% if categorias %}
                 <div class="col-md-2">
                     <label class="form-label">Categoria</label>
                     <select name="categoria_id" class="form-select">
@@ -70,7 +77,9 @@
                         {% endfor %}
                     </select>
                 </div>
+                {% endif %}
             </div>
+            {% if empresas %}
             <div class="row g-3 mt-1">
                 <div class="col-md-3">
                     <label class="form-label">Cliente (Empresa)</label>
@@ -85,6 +94,7 @@
                     </select>
                 </div>
             </div>
+            {% endif %}
             <div class="mt-3">
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-search"></i> Gerar Relatório
@@ -173,12 +183,16 @@
                         <th>Título</th>
                         <th>Status</th>
                         <th>Prioridade</th>
+                        {% if not current_user.is_cliente() %}
                         <th>Cliente</th>
+                        {% endif %}
                         <th>Atendente</th>
                         <th>Criado</th>
-                        <th>Resolvido</th>
+                        <th>Fechado</th>
                         <th>SLA</th>
+                        {% if not current_user.is_cliente() %}
                         <th>Tempo (min)</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody>
@@ -198,10 +212,12 @@
                                 {{ ticket.prioridade.title() }}
                             </span>
                         </td>
+                        {% if not current_user.is_cliente() %}
                         <td>{{ ticket.cliente.nome }}</td>
+                        {% endif %}
                         <td>{{ ticket.atendente.nome if ticket.atendente else '-' }}</td>
                         <td>{{ ticket.criado_em.strftime('%d/%m/%Y') }}</td>
-                        <td>{{ ticket.resolvido_em.strftime('%d/%m/%Y') if ticket.resolvido_em else '-' }}</td>
+                        <td>{{ ticket.fechado_em.strftime('%d/%m/%Y') if ticket.fechado_em else '-' }}</td>
                         <td>
                             {% set sla_status = ticket.sla_resolucao_status() %}
                             {% if sla_status == 'ok' %}
@@ -212,11 +228,13 @@
                             <span class="badge bg-warning text-dark">Pendente</span>
                             {% endif %}
                         </td>
+                        {% if not current_user.is_cliente() %}
                         <td>{{ ticket.tempo_total_atendimento() }}</td>
+                        {% endif %}
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="10" class="text-center text-muted py-4">
+                        <td colspan="{{ 10 if not current_user.is_cliente() else 8 }}" class="text-center text-muted py-4">
                             Nenhum chamado encontrado com os filtros selecionados
                         </td>
                     </tr>

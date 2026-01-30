@@ -37,23 +37,7 @@
         </div>
     </div>
     <div class="col-md-2">
-        <div class="card card-stat border-secondary">
-            <div class="card-body">
-                <h3 class="mb-0">{{ stats.aguardando }}</h3>
-                <small class="text-muted">Aguardando</small>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-2">
         <div class="card card-stat border-success">
-            <div class="card-body">
-                <h3 class="mb-0">{{ stats.resolvidos }}</h3>
-                <small class="text-muted">Resolvidos</small>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-2">
-        <div class="card card-stat border-purple" style="border-color: #6610f2 !important;">
             <div class="card-body">
                 <h3 class="mb-0">{{ stats.fechados }}</h3>
                 <small class="text-muted">Fechados</small>
@@ -288,8 +272,8 @@ fetch('/api/stats/timeline')
                         fill: true
                     },
                     {
-                        label: 'Resolvidos',
-                        data: data.resolvidos,
+                        label: 'Fechados',
+                        data: data.fechados,
                         borderColor: '#198754',
                         backgroundColor: 'rgba(25, 135, 84, 0.1)',
                         fill: true

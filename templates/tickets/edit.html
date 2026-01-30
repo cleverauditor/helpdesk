@@ -49,8 +49,6 @@
                             <select name="status" class="form-select">
                                 <option value="aberto" {% if ticket.status == 'aberto' %}selected{% endif %}>Aberto</option>
                                 <option value="em_andamento" {% if ticket.status == 'em_andamento' %}selected{% endif %}>Em Andamento</option>
-                                <option value="aguardando" {% if ticket.status == 'aguardando' %}selected{% endif %}>Aguardando</option>
-                                <option value="resolvido" {% if ticket.status == 'resolvido' %}selected{% endif %}>Resolvido</option>
                                 <option value="fechado" {% if ticket.status == 'fechado' %}selected{% endif %}>Fechado</option>
                             </select>
                         </div>

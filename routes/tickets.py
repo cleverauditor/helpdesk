@@ -50,6 +50,17 @@ def lista():
     # Clientes só veem seus próprios chamados
     if current_user.is_cliente():
         query = query.filter(Ticket.cliente_id == current_user.id)
+    # Atendentes (não admin) só veem chamados das suas categorias
+    elif current_user.tipo == 'atendente':
+        categorias_ids = current_user.get_categorias_ids()
+        if categorias_ids:
+            # Filtrar por categorias atribuídas ou tickets sem categoria
+            query = query.filter(
+                db.or_(
+                    Ticket.categoria_id.in_(categorias_ids),
+                    Ticket.categoria_id.is_(None)
+                )
+            )
 
     # Ordenar por SLA (mais urgentes primeiro), NULL por último
     tickets = query.order_by(
@@ -58,8 +69,23 @@ def lista():
         page=page, per_page=per_page, error_out=False
     )
 
-    atendentes = User.query.filter(User.tipo.in_(['admin', 'atendente']), User.ativo == True).all()
-    categorias = Category.query.filter_by(ativo=True).all()
+    # Filtros disponíveis baseados no tipo de usuário
+    if current_user.is_admin():
+        atendentes = User.query.filter(User.tipo.in_(['admin', 'atendente']), User.ativo == True).all()
+        categorias = Category.query.filter_by(ativo=True).all()
+    elif current_user.tipo == 'atendente':
+        # Atendente vê apenas ele mesmo no filtro
+        atendentes = [current_user]
+        # Apenas suas categorias
+        categorias_ids = current_user.get_categorias_ids()
+        if categorias_ids:
+            categorias = Category.query.filter(Category.id.in_(categorias_ids), Category.ativo == True).all()
+        else:
+            categorias = Category.query.filter_by(ativo=True).all()
+    else:
+        # Cliente não tem filtros avançados
+        atendentes = []
+        categorias = []
 
     return render_template('tickets/list.html',
                           tickets=tickets,
@@ -151,6 +177,12 @@ def visualizar(id):
         flash('Você não tem permissão para visualizar este chamado.', 'danger')
         return redirect(url_for('tickets.lista'))
 
+    # Atendentes só podem ver chamados das suas categorias
+    if current_user.tipo == 'atendente' and ticket.categoria_id:
+        if not current_user.pode_ver_categoria(ticket.categoria_id):
+            flash('Você não tem permissão para visualizar este chamado.', 'danger')
+            return redirect(url_for('tickets.lista'))
+
     atendentes = User.query.filter(User.tipo.in_(['admin', 'atendente']), User.ativo == True).all()
     return render_template('tickets/view.html', ticket=ticket, atendentes=atendentes)
 
@@ -179,9 +211,7 @@ def editar(id):
             if new_status != old_status:
                 ticket.status = new_status
 
-                if new_status == 'resolvido' and not ticket.resolvido_em:
-                    ticket.resolvido_em = datetime.now()
-                elif new_status == 'fechado' and not ticket.fechado_em:
+                if new_status == 'fechado' and not ticket.fechado_em:
                     ticket.fechado_em = datetime.now()
 
                 # Notificar cliente
@@ -319,12 +349,10 @@ def alterar_status(id):
     old_status = ticket.status
     new_status = request.form.get('status')
 
-    if new_status in ['aberto', 'em_andamento', 'aguardando', 'resolvido', 'fechado']:
+    if new_status in ['aberto', 'em_andamento', 'fechado']:
         ticket.status = new_status
 
-        if new_status == 'resolvido' and not ticket.resolvido_em:
-            ticket.resolvido_em = datetime.now()
-        elif new_status == 'fechado' and not ticket.fechado_em:
+        if new_status == 'fechado' and not ticket.fechado_em:
             ticket.fechado_em = datetime.now()
 
         historico = TicketHistory(

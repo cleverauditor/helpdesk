@@ -37,7 +37,7 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Tipo *</label>
-                            <select name="tipo" class="form-select" id="tipoUsuario" required onchange="toggleEmpresa()">
+                            <select name="tipo" class="form-select" id="tipoUsuario" required onchange="toggleCampos()">
                                 <option value="cliente_externo"
                                         {% if user and user.tipo == 'cliente_externo' %}selected{% endif %}>
                                     Cliente Externo
@@ -98,6 +98,26 @@
                     </div>
                     {% endif %}
 
+                    <!-- Categorias para Atendentes -->
+                    <div class="mb-3" id="campoCategorias" style="display: none;">
+                        <label class="form-label"><i class="bi bi-tags"></i> Categorias de Atendimento</label>
+                        <div class="form-text mb-2">Selecione as categorias que este atendente pode visualizar. Se nenhuma for selecionada, poderá ver todas.</div>
+                        <div class="row">
+                            {% for categoria in categorias %}
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input type="checkbox" name="categorias" value="{{ categoria.id }}"
+                                           class="form-check-input" id="cat_{{ categoria.id }}"
+                                           {% if user and categoria in user.categorias.all() %}checked{% endif %}>
+                                    <label class="form-check-label" for="cat_{{ categoria.id }}">
+                                        {{ categoria.nome }}
+                                    </label>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">
                             <i class="bi bi-check-lg"></i> {{ 'Salvar' if user else 'Criar' }}
@@ -117,8 +137,8 @@
                 <h5 class="mb-0"><i class="bi bi-info-circle"></i> Tipos de Usuário</h5>
             </div>
             <div class="card-body">
-                <p><strong>Administrador:</strong> Acesso total ao sistema, gestão de usuários e configurações.</p>
-                <p><strong>Atendente:</strong> Pode atender chamados, alterar status, ver todos os chamados.</p>
+                <p><strong>Administrador:</strong> Acesso total ao sistema, gestão de usuários e configurações. Vê todos os chamados.</p>
+                <p><strong>Atendente:</strong> Pode atender chamados das categorias atribuídas. Se nenhuma categoria for selecionada, vê todos os chamados.</p>
                 <p><strong>Cliente Interno:</strong> Funcionário da empresa, pode abrir chamados.</p>
                 <p class="mb-0"><strong>Cliente Externo:</strong> Cliente externo, pode abrir chamados.</p>
             </div>
@@ -144,16 +164,25 @@
 
 {% block extra_js %}
 <script>
-function toggleEmpresa() {
+function toggleCampos() {
     const tipo = document.getElementById('tipoUsuario').value;
-    const campo = document.getElementById('campoEmpresa');
+    const campoEmpresa = document.getElementById('campoEmpresa');
+    const campoCategorias = document.getElementById('campoCategorias');
 
+    // Empresa só para cliente externo
     if (tipo === 'cliente_externo') {
-        campo.style.display = 'block';
+        campoEmpresa.style.display = 'block';
     } else {
-        campo.style.display = 'none';
+        campoEmpresa.style.display = 'none';
+    }
+
+    // Categorias só para atendente (não admin)
+    if (tipo === 'atendente') {
+        campoCategorias.style.display = 'block';
+    } else {
+        campoCategorias.style.display = 'none';
     }
 }
-toggleEmpresa();
+toggleCampos();
 </script>
 {% endblock %}

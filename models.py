@@ -5,6 +5,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 db = SQLAlchemy()
 
+# Tabela de associação muitos-para-muitos: Atendente <-> Categoria
+atendente_categoria = db.Table('atendente_categoria',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('categoria_id', db.Integer, db.ForeignKey('categories.id'), primary_key=True)
+)
+
 # Configuração de horário administrativo
 HORA_INICIO = time(8, 0)   # 08:00
 HORA_FIM = time(17, 0)     # 17:00
@@ -123,6 +129,9 @@ class User(UserMixin, db.Model):
     tickets_atendidos = db.relationship('Ticket', backref='atendente', lazy='dynamic',
                                          foreign_keys='Ticket.atendente_id')
     historicos = db.relationship('TicketHistory', backref='usuario', lazy='dynamic')
+    # Categorias que o atendente pode visualizar/atender
+    categorias = db.relationship('Category', secondary=atendente_categoria, lazy='dynamic',
+                                  backref=db.backref('atendentes', lazy='dynamic'))
 
     def set_senha(self, senha):
         self.senha_hash = generate_password_hash(senha)
@@ -138,6 +147,21 @@ class User(UserMixin, db.Model):
 
     def is_cliente(self):
         return self.tipo in ['cliente_interno', 'cliente_externo']
+
+    def pode_ver_categoria(self, categoria_id):
+        """Verifica se o atendente pode ver chamados de uma categoria"""
+        if self.is_admin():
+            return True
+        if not self.is_atendente():
+            return False
+        # Se não tem categorias atribuídas, pode ver todas
+        if self.categorias.count() == 0:
+            return True
+        return self.categorias.filter_by(id=categoria_id).first() is not None
+
+    def get_categorias_ids(self):
+        """Retorna lista de IDs das categorias do atendente"""
+        return [c.id for c in self.categorias.all()]
 
     def __repr__(self):
         return f'<User {self.email}>'
@@ -191,7 +215,7 @@ class Ticket(db.Model):
     titulo = db.Column(db.String(200), nullable=False)
     descricao = db.Column(db.Text, nullable=False)
     status = db.Column(db.String(20), default='aberto')
-    # status: aberto, em_andamento, aguardando, resolvido, fechado
+    # status: aberto, em_andamento, fechado
     prioridade = db.Column(db.String(20), default='media')
     # prioridade: baixa, media, alta, critica
 
@@ -233,8 +257,10 @@ class Ticket(db.Model):
         """Verifica status do SLA de resolução considerando horas úteis"""
         if not self.sla_resolucao_limite:
             return 'pendente'
-        if self.resolvido_em:
-            return 'ok' if self.resolvido_em <= self.sla_resolucao_limite else 'violado'
+        # Usar fechado_em para verificar SLA (resolvido_em mantido para compatibilidade)
+        data_conclusao = self.fechado_em or self.resolvido_em
+        if data_conclusao:
+            return 'ok' if data_conclusao <= self.sla_resolucao_limite else 'violado'
         if datetime.now() > self.sla_resolucao_limite:
             return 'violado'
         return 'pendente'

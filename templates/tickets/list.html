@@ -20,8 +20,6 @@
                     <option value="">Todos</option>
                     <option value="aberto" {% if request.args.get('status') == 'aberto' %}selected{% endif %}>Aberto</option>
                     <option value="em_andamento" {% if request.args.get('status') == 'em_andamento' %}selected{% endif %}>Em Andamento</option>
-                    <option value="aguardando" {% if request.args.get('status') == 'aguardando' %}selected{% endif %}>Aguardando</option>
-                    <option value="resolvido" {% if request.args.get('status') == 'resolvido' %}selected{% endif %}>Resolvido</option>
                     <option value="fechado" {% if request.args.get('status') == 'fechado' %}selected{% endif %}>Fechado</option>
                 </select>
             </div>
@@ -35,7 +33,7 @@
                     <option value="baixa" {% if request.args.get('prioridade') == 'baixa' %}selected{% endif %}>Baixa</option>
                 </select>
             </div>
-            {% if current_user.is_atendente() %}
+            {% if current_user.is_admin() and atendentes %}
             <div class="col-md-2">
                 <label class="form-label">Atendente</label>
                 <select name="atendente_id" class="form-select">
@@ -48,6 +46,7 @@
                 </select>
             </div>
             {% endif %}
+            {% if categorias %}
             <div class="col-md-2">
                 <label class="form-label">Categoria</label>
                 <select name="categoria_id" class="form-select">
@@ -59,6 +58,7 @@
                     {% endfor %}
                 </select>
             </div>
+            {% endif %}
             <div class="col-md-3">
                 <label class="form-label">Buscar</label>
                 <input type="text" name="busca" class="form-control"

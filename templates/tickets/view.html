@@ -90,8 +90,6 @@
                         <select name="status" class="form-select">
                             <option value="aberto" {% if ticket.status == 'aberto' %}selected{% endif %}>Aberto</option>
                             <option value="em_andamento" {% if ticket.status == 'em_andamento' %}selected{% endif %}>Em Andamento</option>
-                            <option value="aguardando" {% if ticket.status == 'aguardando' %}selected{% endif %}>Aguardando</option>
-                            <option value="resolvido" {% if ticket.status == 'resolvido' %}selected{% endif %}>Resolvido</option>
                             <option value="fechado" {% if ticket.status == 'fechado' %}selected{% endif %}>Fechado</option>
                         </select>
                     </div>
@@ -204,10 +202,10 @@
                         <td class="text-muted">Criado em</td>
                         <td>{{ ticket.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
                     </tr>
-                    {% if ticket.resolvido_em %}
+                    {% if ticket.fechado_em %}
                     <tr>
-                        <td class="text-muted">Resolvido em</td>
-                        <td>{{ ticket.resolvido_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td class="text-muted">Fechado em</td>
+                        <td>{{ ticket.fechado_em.strftime('%d/%m/%Y %H:%M') }}</td>
                     </tr>
                     {% endif %}
                     <tr>
@@ -255,7 +253,7 @@
                     {% endif %}
                 </div>
 
-                {% if ticket.status not in ['resolvido', 'fechado'] %}
+                {% if ticket.status != 'fechado' %}
                 {% set horas_restantes = ticket.horas_uteis_restantes() %}
                 <div class="mt-3 pt-3 border-top">
                     <strong>Tempo Restante</strong><br>

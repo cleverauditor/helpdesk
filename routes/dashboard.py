@@ -20,14 +20,12 @@ def index():
         'total': base_query.count(),
         'abertos': base_query.filter_by(status='aberto').count(),
         'em_andamento': base_query.filter_by(status='em_andamento').count(),
-        'aguardando': base_query.filter_by(status='aguardando').count(),
-        'resolvidos': base_query.filter_by(status='resolvido').count(),
         'fechados': base_query.filter_by(status='fechado').count()
     }
 
     # SLA Stats
     now = datetime.utcnow()
-    tickets_ativos = base_query.filter(Ticket.status.in_(['aberto', 'em_andamento', 'aguardando'])).all()
+    tickets_ativos = base_query.filter(Ticket.status.in_(['aberto', 'em_andamento'])).all()
 
     sla_ok = 0
     sla_risco = 0
@@ -81,9 +79,7 @@ def stats_por_status():
     colors = {
         'aberto': '#f7941d',
         'em_andamento': '#ffc107',
-        'aguardando': '#58595b',
-        'resolvido': '#198754',
-        'fechado': '#333333'
+        'fechado': '#198754'
     }
 
     for status, count in resultado:
@@ -126,46 +122,46 @@ def stats_timeline():
     ).filter(Ticket.criado_em >= inicio)\
      .group_by(func.date(Ticket.criado_em)).all()
 
-    # Chamados resolvidos por dia
-    resolvidos = db.session.query(
-        func.date(Ticket.resolvido_em),
+    # Chamados fechados por dia
+    fechados = db.session.query(
+        func.date(Ticket.fechado_em),
         func.count(Ticket.id)
-    ).filter(Ticket.resolvido_em >= inicio)\
-     .group_by(func.date(Ticket.resolvido_em)).all()
+    ).filter(Ticket.fechado_em >= inicio)\
+     .group_by(func.date(Ticket.fechado_em)).all()
 
     # Criar dicionários para lookup
     criados_dict = {str(d): c for d, c in criados}
-    resolvidos_dict = {str(d): c for d, c in resolvidos}
+    fechados_dict = {str(d): c for d, c in fechados}
 
     # Gerar labels e dados para os últimos 30 dias
     labels = []
     data_criados = []
-    data_resolvidos = []
+    data_fechados = []
 
     for i in range(30):
         dia = inicio + timedelta(days=i)
         labels.append(dia.strftime('%d/%m'))
         data_criados.append(criados_dict.get(str(dia), 0))
-        data_resolvidos.append(resolvidos_dict.get(str(dia), 0))
+        data_fechados.append(fechados_dict.get(str(dia), 0))
 
     return jsonify({
         'labels': labels,
         'criados': data_criados,
-        'resolvidos': data_resolvidos
+        'fechados': data_fechados
     })
 
 
 @dashboard_bp.route('/api/stats/top-atendentes')
 @login_required
 def stats_top_atendentes():
-    # Top 5 atendentes por tickets resolvidos no mês
-    inicio_mes = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    # Top 5 atendentes por tickets fechados no mês
+    inicio_mes = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
     resultado = db.session.query(
         User.nome,
         func.count(Ticket.id)
     ).join(Ticket, Ticket.atendente_id == User.id)\
-     .filter(Ticket.resolvido_em >= inicio_mes)\
+     .filter(Ticket.fechado_em >= inicio_mes)\
      .group_by(User.nome)\
      .order_by(func.count(Ticket.id).desc())\
      .limit(5).all()
@@ -180,14 +176,14 @@ def stats_top_atendentes():
 @login_required
 def stats_sla():
     # Taxa de cumprimento de SLA
-    tickets_resolvidos = Ticket.query.filter(Ticket.resolvido_em.isnot(None)).all()
+    tickets_fechados = Ticket.query.filter(Ticket.fechado_em.isnot(None)).all()
 
     dentro_sla = 0
     fora_sla = 0
 
-    for ticket in tickets_resolvidos:
-        if ticket.sla_resolucao_limite and ticket.resolvido_em:
-            if ticket.resolvido_em <= ticket.sla_resolucao_limite:
+    for ticket in tickets_fechados:
+        if ticket.sla_resolucao_limite and ticket.fechado_em:
+            if ticket.fechado_em <= ticket.sla_resolucao_limite:
                 dentro_sla += 1
             else:
                 fora_sla += 1

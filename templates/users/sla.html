@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}Configuração de SLA - Helpdesk{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-clock-history"></i> Configuração de SLA</h2>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-sliders"></i> Tempos por Prioridade (Horas Úteis)</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Horário Administrativo:</strong> 08:00 às 17:00 (Segunda a Sexta)
+                    <br>
+                    <small>Os tempos são calculados apenas em horas úteis dentro deste horário.</small>
+                </div>
+
+                <form method="POST" action="{{ url_for('users.atualizar_sla') }}">
+                    <table class="table table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 25%">Prioridade</th>
+                                <th style="width: 25%">Tempo Resposta (horas)</th>
+                                <th style="width: 25%">Tempo Resolução (horas)</th>
+                                <th style="width: 25%">Exemplo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sla in slas %}
+                            <tr>
+                                <td>
+                                    <span class="badge badge-prioridade-{{ sla.prioridade }} fs-6">
+                                        {{ sla.prioridade.title() }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <input type="number" name="resposta_{{ sla.prioridade }}"
+                                           class="form-control" min="1" max="999"
+                                           value="{{ sla.tempo_resposta_horas }}" required>
+                                </td>
+                                <td>
+                                    <input type="number" name="resolucao_{{ sla.prioridade }}"
+                                           class="form-control" min="1" max="999"
+                                           value="{{ sla.tempo_resolucao_horas }}" required>
+                                </td>
+                                <td class="small text-muted">
+                                    {% if sla.tempo_resolucao_horas <= 9 %}
+                                        Mesmo dia (se aberto cedo)
+                                    {% elif sla.tempo_resolucao_horas <= 18 %}
+                                        Até 2 dias úteis
+                                    {% elif sla.tempo_resolucao_horas <= 27 %}
+                                        Até 3 dias úteis
+                                    {% elif sla.tempo_resolucao_horas <= 45 %}
+                                        Até 5 dias úteis
+                                    {% else %}
+                                        {{ (sla.tempo_resolucao_horas / 9)|round|int }} dias úteis
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+
+                    <div class="d-flex justify-content-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> Salvar Alterações
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-question-circle"></i> Ajuda</h5>
+            </div>
+            <div class="card-body">
+                <h6>Tempo de Resposta</h6>
+                <p class="small text-muted">
+                    Tempo máximo para a primeira interação do atendente com o chamado.
+                </p>
+
+                <h6>Tempo de Resolução</h6>
+                <p class="small text-muted">
+                    Tempo máximo para resolver completamente o chamado.
+                </p>
+
+                <hr>
+
+                <h6>Cálculo de Horas Úteis</h6>
+                <p class="small text-muted">
+                    O sistema conta apenas horas dentro do expediente:
+                </p>
+                <ul class="small text-muted">
+                    <li>9 horas por dia (08:00-17:00)</li>
+                    <li>Segunda a Sexta</li>
+                    <li>Fins de semana não contam</li>
+                </ul>
+
+                <hr>
+
+                <h6>Exemplos</h6>
+                <table class="table table-sm small">
+                    <tr>
+                        <td>4 horas</td>
+                        <td>Meio dia de trabalho</td>
+                    </tr>
+                    <tr>
+                        <td>9 horas</td>
+                        <td>1 dia útil completo</td>
+                    </tr>
+                    <tr>
+                        <td>18 horas</td>
+                        <td>2 dias úteis</td>
+                    </tr>
+                    <tr>
+                        <td>45 horas</td>
+                        <td>5 dias úteis (1 semana)</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

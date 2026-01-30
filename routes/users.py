@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from functools import wraps
-from models import db, User, Category
+from models import db, User, Category, SLAConfig
 
 users_bp = Blueprint('users', __name__, url_prefix='/usuarios')
 
@@ -181,3 +181,63 @@ def toggle_categoria(id):
     flash(f'Categoria {categoria.nome} {status}.', 'success')
 
     return redirect(url_for('users.categorias'))
+
+
+# Rotas de Configuração de SLA
+@users_bp.route('/sla')
+@login_required
+@admin_required
+def sla_config():
+    # Garantir que todas as prioridades existam
+    prioridades = ['critica', 'alta', 'media', 'baixa']
+    defaults = {
+        'critica': (1, 4),
+        'alta': (2, 8),
+        'media': (4, 24),
+        'baixa': (8, 48)
+    }
+
+    for prioridade in prioridades:
+        if not SLAConfig.query.filter_by(prioridade=prioridade).first():
+            resp, resol = defaults[prioridade]
+            sla = SLAConfig(
+                prioridade=prioridade,
+                tempo_resposta_horas=resp,
+                tempo_resolucao_horas=resol
+            )
+            db.session.add(sla)
+    db.session.commit()
+
+    slas = SLAConfig.query.order_by(
+        db.case(
+            (SLAConfig.prioridade == 'critica', 1),
+            (SLAConfig.prioridade == 'alta', 2),
+            (SLAConfig.prioridade == 'media', 3),
+            (SLAConfig.prioridade == 'baixa', 4),
+        )
+    ).all()
+
+    return render_template('users/sla.html', slas=slas)
+
+
+@users_bp.route('/sla/atualizar', methods=['POST'])
+@login_required
+@admin_required
+def atualizar_sla():
+    prioridades = ['critica', 'alta', 'media', 'baixa']
+
+    for prioridade in prioridades:
+        sla = SLAConfig.query.filter_by(prioridade=prioridade).first()
+        if sla:
+            resp = request.form.get(f'resposta_{prioridade}', type=int)
+            resol = request.form.get(f'resolucao_{prioridade}', type=int)
+
+            if resp and resp > 0:
+                sla.tempo_resposta_horas = resp
+            if resol and resol > 0:
+                sla.tempo_resolucao_horas = resol
+
+    db.session.commit()
+    flash('Configurações de SLA atualizadas com sucesso!', 'success')
+
+    return redirect(url_for('users.sla_config'))

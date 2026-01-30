@@ -198,6 +198,11 @@
                     <i class="bi bi-tags"></i> Categorias
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'users.sla_config' %}active{% endif %}" href="{{ url_for('users.sla_config') }}">
+                    <i class="bi bi-clock-history"></i> SLA
+                </a>
+            </li>
             {% endif %}
         </ul>
         <div class="sidebar-footer">

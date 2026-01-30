@@ -51,7 +51,10 @@ def lista():
     if current_user.is_cliente():
         query = query.filter(Ticket.cliente_id == current_user.id)
 
-    tickets = query.order_by(Ticket.criado_em.desc()).paginate(
+    # Ordenar por SLA (mais urgentes primeiro), NULL por último
+    tickets = query.order_by(
+        Ticket.sla_resolucao_limite.asc().nullslast()
+    ).paginate(
         page=page, per_page=per_page, error_out=False
     )
 

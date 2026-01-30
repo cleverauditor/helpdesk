@@ -128,11 +128,14 @@
                         <td>
                             {% set sla_status = ticket.sla_resolucao_status() %}
                             {% if sla_status == 'ok' %}
-                            <i class="bi bi-check-circle-fill sla-ok" title="SLA Cumprido"></i>
+                            <i class="bi bi-check-circle-fill sla-ok"></i>
+                            <small class="text-success">{{ ticket.sla_resolucao_limite.strftime('%d/%m %H:%M') }}</small>
                             {% elif sla_status == 'violado' %}
-                            <i class="bi bi-x-circle-fill sla-violado" title="SLA Violado"></i>
+                            <i class="bi bi-x-circle-fill sla-violado"></i>
+                            <small class="text-danger">{{ ticket.sla_resolucao_limite.strftime('%d/%m %H:%M') }}</small>
                             {% else %}
-                            <i class="bi bi-clock sla-risco" title="SLA: {{ ticket.sla_resolucao_limite.strftime('%d/%m %H:%M') }}"></i>
+                            <i class="bi bi-clock"></i>
+                            <small>{{ ticket.sla_resolucao_limite.strftime('%d/%m %H:%M') if ticket.sla_resolucao_limite else '-' }}</small>
                             {% endif %}
                         </td>
                         <td>{{ ticket.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>

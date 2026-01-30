@@ -49,9 +49,12 @@
             padding: 20px;
         }
         .sidebar-brand {
-            padding: 15px;
             text-align: center;
             border-bottom: 1px solid rgba(255,255,255,.1);
+        }
+        .sidebar-brand .logo-container {
+            background: #ffffff;
+            padding: 15px;
         }
         .sidebar-brand img {
             max-width: 180px;
@@ -61,8 +64,9 @@
             display: block;
             color: var(--maxsim-orange);
             font-size: 0.75rem;
-            margin-top: 5px;
+            padding: 10px 0;
             letter-spacing: 1px;
+            font-weight: 600;
         }
         .sidebar-footer {
             position: absolute;
@@ -166,7 +170,9 @@
     {% if current_user.is_authenticated %}
     <nav class="sidebar">
         <div class="sidebar-brand">
-            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Maxsim">
+            <div class="logo-container">
+                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Maxsim">
+            </div>
             <small>HELPDESK</small>
         </div>
         <ul class="nav flex-column mt-3">

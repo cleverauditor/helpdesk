@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Chamado #{{ ticket.id }} - Helpdesk{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-pencil"></i> Editar Chamado #{{ ticket.id }}</h2>
+            <a href="{{ url_for('tickets.visualizar', id=ticket.id) }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Voltar
+            </a>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Título *</label>
+                        <input type="text" name="titulo" class="form-control"
+                               value="{{ ticket.titulo }}" required minlength="5">
+                    </div>
+
+                    {% if current_user.is_atendente() %}
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Categoria</label>
+                            <select name="categoria_id" class="form-select">
+                                <option value="">Selecione...</option>
+                                {% for categoria in categorias %}
+                                <option value="{{ categoria.id }}"
+                                        {% if ticket.categoria_id == categoria.id %}selected{% endif %}>
+                                    {{ categoria.nome }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Prioridade</label>
+                            <select name="prioridade" class="form-select">
+                                <option value="baixa" {% if ticket.prioridade == 'baixa' %}selected{% endif %}>Baixa</option>
+                                <option value="media" {% if ticket.prioridade == 'media' %}selected{% endif %}>Média</option>
+                                <option value="alta" {% if ticket.prioridade == 'alta' %}selected{% endif %}>Alta</option>
+                                <option value="critica" {% if ticket.prioridade == 'critica' %}selected{% endif %}>Crítica</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Status</label>
+                            <select name="status" class="form-select">
+                                <option value="aberto" {% if ticket.status == 'aberto' %}selected{% endif %}>Aberto</option>
+                                <option value="em_andamento" {% if ticket.status == 'em_andamento' %}selected{% endif %}>Em Andamento</option>
+                                <option value="aguardando" {% if ticket.status == 'aguardando' %}selected{% endif %}>Aguardando</option>
+                                <option value="resolvido" {% if ticket.status == 'resolvido' %}selected{% endif %}>Resolvido</option>
+                                <option value="fechado" {% if ticket.status == 'fechado' %}selected{% endif %}>Fechado</option>
+                            </select>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label">Descrição *</label>
+                        <textarea name="descricao" class="form-control" rows="8"
+                                  required minlength="10">{{ ticket.descricao }}</textarea>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> Salvar Alterações
+                        </button>
+                        <a href="{{ url_for('tickets.visualizar', id=ticket.id) }}" class="btn btn-outline-secondary">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Informações</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>ID:</strong> #{{ ticket.id }}</p>
+                <p><strong>Cliente:</strong> {{ ticket.cliente.nome }}</p>
+                <p><strong>Atendente:</strong> {{ ticket.atendente.nome if ticket.atendente else '-' }}</p>
+                <p><strong>Criado em:</strong> {{ ticket.criado_em.strftime('%d/%m/%Y %H:%M') }}</p>
+                <p class="mb-0"><strong>Atualizado:</strong> {{ ticket.atualizado_em.strftime('%d/%m/%Y %H:%M') }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

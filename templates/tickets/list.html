@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Chamados - Helpdesk{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-ticket-detailed"></i> Chamados</h2>
+    <a href="{{ url_for('tickets.criar') }}" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i> Novo Chamado
+    </a>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-2">
+                <label class="form-label">Status</label>
+                <select name="status" class="form-select">
+                    <option value="">Todos</option>
+                    <option value="aberto" {% if request.args.get('status') == 'aberto' %}selected{% endif %}>Aberto</option>
+                    <option value="em_andamento" {% if request.args.get('status') == 'em_andamento' %}selected{% endif %}>Em Andamento</option>
+                    <option value="aguardando" {% if request.args.get('status') == 'aguardando' %}selected{% endif %}>Aguardando</option>
+                    <option value="resolvido" {% if request.args.get('status') == 'resolvido' %}selected{% endif %}>Resolvido</option>
+                    <option value="fechado" {% if request.args.get('status') == 'fechado' %}selected{% endif %}>Fechado</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Prioridade</label>
+                <select name="prioridade" class="form-select">
+                    <option value="">Todas</option>
+                    <option value="critica" {% if request.args.get('prioridade') == 'critica' %}selected{% endif %}>Crítica</option>
+                    <option value="alta" {% if request.args.get('prioridade') == 'alta' %}selected{% endif %}>Alta</option>
+                    <option value="media" {% if request.args.get('prioridade') == 'media' %}selected{% endif %}>Média</option>
+                    <option value="baixa" {% if request.args.get('prioridade') == 'baixa' %}selected{% endif %}>Baixa</option>
+                </select>
+            </div>
+            {% if current_user.is_atendente() %}
+            <div class="col-md-2">
+                <label class="form-label">Atendente</label>
+                <select name="atendente_id" class="form-select">
+                    <option value="">Todos</option>
+                    {% for atendente in atendentes %}
+                    <option value="{{ atendente.id }}" {% if request.args.get('atendente_id')|int == atendente.id %}selected{% endif %}>
+                        {{ atendente.nome }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <div class="col-md-2">
+                <label class="form-label">Categoria</label>
+                <select name="categoria_id" class="form-select">
+                    <option value="">Todas</option>
+                    {% for categoria in categorias %}
+                    <option value="{{ categoria.id }}" {% if request.args.get('categoria_id')|int == categoria.id %}selected{% endif %}>
+                        {{ categoria.nome }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Buscar</label>
+                <input type="text" name="busca" class="form-control"
+                       placeholder="ID, título ou descrição"
+                       value="{{ request.args.get('busca', '') }}">
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-search"></i>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Lista de Chamados -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Título</th>
+                        <th>Status</th>
+                        <th>Prioridade</th>
+                        <th>Categoria</th>
+                        {% if current_user.is_atendente() %}
+                        <th>Cliente</th>
+                        <th>Atendente</th>
+                        {% endif %}
+                        <th>SLA</th>
+                        <th>Criado em</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ticket in tickets.items %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('tickets.visualizar', id=ticket.id) }}">
+                                {{ ticket.id }}
+                            </a>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('tickets.visualizar', id=ticket.id) }}" class="text-decoration-none">
+                                {{ ticket.titulo[:40] }}{% if ticket.titulo|length > 40 %}...{% endif %}
+                            </a>
+                            {% if ticket.anexos.count() > 0 %}
+                            <i class="bi bi-paperclip text-muted" title="{{ ticket.anexos.count() }} anexo(s)"></i>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge badge-status-{{ ticket.status }}">
+                                {{ ticket.status.replace('_', ' ').title() }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge badge-prioridade-{{ ticket.prioridade }}">
+                                {{ ticket.prioridade.title() }}
+                            </span>
+                        </td>
+                        <td>{{ ticket.categoria.nome if ticket.categoria else '-' }}</td>
+                        {% if current_user.is_atendente() %}
+                        <td>{{ ticket.cliente.nome }}</td>
+                        <td>{{ ticket.atendente.nome if ticket.atendente else '-' }}</td>
+                        {% endif %}
+                        <td>
+                            {% set sla_status = ticket.sla_resolucao_status() %}
+                            {% if sla_status == 'ok' %}
+                            <i class="bi bi-check-circle-fill sla-ok" title="SLA Cumprido"></i>
+                            {% elif sla_status == 'violado' %}
+                            <i class="bi bi-x-circle-fill sla-violado" title="SLA Violado"></i>
+                            {% else %}
+                            <i class="bi bi-clock sla-risco" title="SLA: {{ ticket.sla_resolucao_limite.strftime('%d/%m %H:%M') }}"></i>
+                            {% endif %}
+                        </td>
+                        <td>{{ ticket.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-4">
+                            Nenhum chamado encontrado
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Paginação -->
+    {% if tickets.pages > 1 %}
+    <div class="card-footer">
+        <nav>
+            <ul class="pagination mb-0 justify-content-center">
+                {% if tickets.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('tickets.lista', page=tickets.prev_num, **request.args) }}">
+                        Anterior
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for page_num in tickets.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                    {% if page_num %}
+                        <li class="page-item {% if page_num == tickets.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('tickets.lista', page=page_num, **request.args) }}">
+                                {{ page_num }}
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if tickets.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('tickets.lista', page=tickets.next_num, **request.args) }}">
+                        Próximo
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

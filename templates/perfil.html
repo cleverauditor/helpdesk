@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Meu Perfil - Helpdesk{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-person-circle"></i> Meu Perfil</h2>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nome</label>
+                            <input type="text" name="nome" class="form-control"
+                                   value="{{ current_user.nome }}" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control"
+                                   value="{{ current_user.email }}" disabled>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Departamento</label>
+                            <input type="text" name="departamento" class="form-control"
+                                   value="{{ current_user.departamento or '' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Telefone</label>
+                            <input type="text" name="telefone" class="form-control"
+                                   value="{{ current_user.telefone or '' }}">
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Tipo</label>
+                            <input type="text" class="form-control"
+                                   value="{{ current_user.tipo.replace('_', ' ').title() }}" disabled>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Membro desde</label>
+                            <input type="text" class="form-control"
+                                   value="{{ current_user.criado_em.strftime('%d/%m/%Y') }}" disabled>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <h5>Alterar Senha</h5>
+                    <p class="text-muted small">Deixe em branco para manter a senha atual</p>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nova Senha</label>
+                            <input type="password" name="nova_senha" class="form-control" minlength="6">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Confirmar Nova Senha</label>
+                            <input type="password" name="confirmar_senha" class="form-control">
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> Salvar Alterações
+                        </button>
+                        <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline-secondary">Cancelar</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Estatísticas</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Chamados Abertos:</strong>
+                    {{ current_user.tickets_criados.filter_by(status='aberto').count() }}</p>
+                <p><strong>Chamados em Andamento:</strong>
+                    {{ current_user.tickets_criados.filter_by(status='em_andamento').count() }}</p>
+                <p><strong>Chamados Resolvidos:</strong>
+                    {{ current_user.tickets_criados.filter_by(status='resolvido').count() }}</p>
+                <p class="mb-0"><strong>Total de Chamados:</strong>
+                    {{ current_user.tickets_criados.count() }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

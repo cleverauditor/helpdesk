@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar' if user else 'Novo' }} Usuário - Helpdesk{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>
+                <i class="bi bi-person-{{ 'gear' if user else 'plus' }}"></i>
+                {{ 'Editar' if user else 'Novo' }} Usuário
+            </h2>
+            <a href="{{ url_for('users.lista') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Voltar
+            </a>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nome *</label>
+                            <input type="text" name="nome" class="form-control"
+                                   value="{{ user.nome if user else '' }}" required minlength="3">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Email {% if not user %}*{% endif %}</label>
+                            {% if user %}
+                            <input type="email" class="form-control" value="{{ user.email }}" disabled>
+                            {% else %}
+                            <input type="email" name="email" class="form-control" required>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Tipo *</label>
+                            <select name="tipo" class="form-select" required>
+                                <option value="cliente_externo"
+                                        {% if user and user.tipo == 'cliente_externo' %}selected{% endif %}>
+                                    Cliente Externo
+                                </option>
+                                <option value="cliente_interno"
+                                        {% if user and user.tipo == 'cliente_interno' %}selected{% endif %}>
+                                    Cliente Interno
+                                </option>
+                                <option value="atendente"
+                                        {% if user and user.tipo == 'atendente' %}selected{% endif %}>
+                                    Atendente
+                                </option>
+                                <option value="admin"
+                                        {% if user and user.tipo == 'admin' %}selected{% endif %}>
+                                    Administrador
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Departamento</label>
+                            <input type="text" name="departamento" class="form-control"
+                                   value="{{ user.departamento if user else '' }}">
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Telefone</label>
+                            <input type="text" name="telefone" class="form-control"
+                                   value="{{ user.telefone if user else '' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Senha {% if not user %}*{% endif %}</label>
+                            <input type="password" name="senha" class="form-control"
+                                   {% if not user %}required{% endif %} minlength="6"
+                                   placeholder="{{ 'Deixe em branco para manter' if user else '' }}">
+                            {% if user %}
+                            <div class="form-text">Deixe em branco para manter a senha atual</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if user %}
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" name="ativo" value="1" class="form-check-input" id="ativo"
+                                   {% if user.ativo %}checked{% endif %}>
+                            <label class="form-check-label" for="ativo">Usuário Ativo</label>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> {{ 'Salvar' if user else 'Criar' }}
+                        </button>
+                        <a href="{{ url_for('users.lista') }}" class="btn btn-outline-secondary">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Tipos de Usuário</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Administrador:</strong> Acesso total ao sistema, gestão de usuários e configurações.</p>
+                <p><strong>Atendente:</strong> Pode atender chamados, alterar status, ver todos os chamados.</p>
+                <p><strong>Cliente Interno:</strong> Funcionário da empresa, pode abrir chamados.</p>
+                <p class="mb-0"><strong>Cliente Externo:</strong> Cliente externo, pode abrir chamados.</p>
+            </div>
+        </div>
+
+        {% if user %}
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Estatísticas</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Chamados Criados:</strong> {{ user.tickets_criados.count() }}</p>
+                {% if user.is_atendente() %}
+                <p><strong>Chamados Atendidos:</strong> {{ user.tickets_atendidos.count() }}</p>
+                {% endif %}
+                <p class="mb-0"><strong>Membro desde:</strong> {{ user.criado_em.strftime('%d/%m/%Y') }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

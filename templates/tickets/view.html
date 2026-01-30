@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+
+{% block title %}Chamado #{{ ticket.id }} - Helpdesk{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>
+        <i class="bi bi-ticket-detailed"></i> Chamado #{{ ticket.id }}
+        <span class="badge badge-status-{{ ticket.status }}">{{ ticket.status.replace('_', ' ').title() }}</span>
+    </h2>
+    <div>
+        {% if current_user.is_atendente() or ticket.cliente_id == current_user.id %}
+        <a href="{{ url_for('tickets.editar', id=ticket.id) }}" class="btn btn-outline-primary">
+            <i class="bi bi-pencil"></i> Editar
+        </a>
+        {% endif %}
+        <a href="{{ url_for('tickets.lista') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Detalhes do Chamado -->
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">{{ ticket.titulo }}</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-4">
+                    <h6 class="text-muted mb-2">Descrição</h6>
+                    <p style="white-space: pre-wrap;">{{ ticket.descricao }}</p>
+                </div>
+
+                {% if ticket.anexos.count() > 0 %}
+                <div class="mb-4">
+                    <h6 class="text-muted mb-2">Anexos</h6>
+                    <ul class="list-unstyled">
+                        {% for anexo in ticket.anexos %}
+                        <li>
+                            <a href="{{ url_for('tickets.download_anexo', id=anexo.id) }}" class="text-decoration-none">
+                                <i class="bi bi-paperclip"></i> {{ anexo.nome_arquivo }}
+                            </a>
+                            <small class="text-muted">({{ (anexo.tamanho / 1024)|round(1) }} KB)</small>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Atribuição (apenas atendentes) -->
+        {% if current_user.is_atendente() %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-person-check"></i> Atribuição</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('tickets.atribuir', id=ticket.id) }}" class="row g-3">
+                    <div class="col-md-8">
+                        <select name="atendente_id" class="form-select">
+                            <option value="">-- Sem atendente --</option>
+                            {% for atendente in atendentes %}
+                            <option value="{{ atendente.id }}"
+                                    {% if ticket.atendente_id == atendente.id %}selected{% endif %}>
+                                {{ atendente.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-check"></i> Atribuir
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Alterar Status -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-flag"></i> Alterar Status</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('tickets.alterar_status', id=ticket.id) }}" class="row g-3">
+                    <div class="col-md-8">
+                        <select name="status" class="form-select">
+                            <option value="aberto" {% if ticket.status == 'aberto' %}selected{% endif %}>Aberto</option>
+                            <option value="em_andamento" {% if ticket.status == 'em_andamento' %}selected{% endif %}>Em Andamento</option>
+                            <option value="aguardando" {% if ticket.status == 'aguardando' %}selected{% endif %}>Aguardando</option>
+                            <option value="resolvido" {% if ticket.status == 'resolvido' %}selected{% endif %}>Resolvido</option>
+                            <option value="fechado" {% if ticket.status == 'fechado' %}selected{% endif %}>Fechado</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <button type="submit" class="btn btn-warning w-100">
+                            <i class="bi bi-arrow-repeat"></i> Alterar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Adicionar Comentário -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-chat-dots"></i> Adicionar Comentário</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('tickets.comentar', id=ticket.id) }}" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <textarea name="comentario" class="form-control" rows="3"
+                                  placeholder="Digite seu comentário..." required></textarea>
+                    </div>
+
+                    {% if current_user.is_atendente() %}
+                    <div class="mb-3">
+                        <label class="form-label">Tempo gasto (minutos)</label>
+                        <input type="number" name="tempo_gasto" class="form-control" min="0" value="0" style="max-width: 150px;">
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label">Anexar arquivos</label>
+                        <input type="file" name="anexos" class="form-control" multiple
+                               accept=".png,.jpg,.jpeg,.gif,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-send"></i> Enviar
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Histórico -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Histórico</h5>
+            </div>
+            <div class="card-body">
+                {% for historico in ticket.historicos %}
+                <div class="timeline-item">
+                    <div class="d-flex justify-content-between">
+                        <strong>{{ historico.usuario.nome }}</strong>
+                        <small class="text-muted">{{ historico.criado_em.strftime('%d/%m/%Y %H:%M') }}</small>
+                    </div>
+                    <span class="badge bg-secondary">{{ historico.acao.replace('_', ' ').title() }}</span>
+                    {% if historico.tempo_gasto_minutos > 0 %}
+                    <span class="badge bg-info">{{ historico.tempo_gasto_minutos }} min</span>
+                    {% endif %}
+                    {% if historico.descricao %}
+                    <p class="mb-0 mt-2" style="white-space: pre-wrap;">{{ historico.descricao }}</p>
+                    {% endif %}
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">Nenhum histórico disponível.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Informações</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tr>
+                        <td class="text-muted">Status</td>
+                        <td>
+                            <span class="badge badge-status-{{ ticket.status }}">
+                                {{ ticket.status.replace('_', ' ').title() }}
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Prioridade</td>
+                        <td>
+                            <span class="badge badge-prioridade-{{ ticket.prioridade }}">
+                                {{ ticket.prioridade.title() }}
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Categoria</td>
+                        <td>{{ ticket.categoria.nome if ticket.categoria else '-' }}</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Cliente</td>
+                        <td>{{ ticket.cliente.nome }}</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Atendente</td>
+                        <td>{{ ticket.atendente.nome if ticket.atendente else '-' }}</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Criado em</td>
+                        <td>{{ ticket.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                    </tr>
+                    {% if ticket.resolvido_em %}
+                    <tr>
+                        <td class="text-muted">Resolvido em</td>
+                        <td>{{ ticket.resolvido_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <td class="text-muted">Tempo Total</td>
+                        <td>{{ ticket.tempo_total_atendimento() }} minutos</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clock"></i> SLA</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info py-2 small mb-3">
+                    <i class="bi bi-info-circle"></i> Horário administrativo: 08:00 - 17:00 (Seg-Sex)
+                </div>
+
+                <div class="mb-3">
+                    <strong>Resposta</strong><br>
+                    <small class="text-muted">Limite: {{ ticket.sla_resposta_limite.strftime('%d/%m/%Y %H:%M') if ticket.sla_resposta_limite else '-' }}</small>
+                    <br>
+                    {% set resp_status = ticket.sla_resposta_status() %}
+                    {% if resp_status == 'ok' %}
+                    <span class="badge bg-success"><i class="bi bi-check"></i> Cumprido</span>
+                    {% elif resp_status == 'violado' %}
+                    <span class="badge bg-danger"><i class="bi bi-x"></i> Violado</span>
+                    {% else %}
+                    <span class="badge bg-warning text-dark"><i class="bi bi-clock"></i> Pendente</span>
+                    {% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <strong>Resolução</strong><br>
+                    <small class="text-muted">Limite: {{ ticket.sla_resolucao_limite.strftime('%d/%m/%Y %H:%M') if ticket.sla_resolucao_limite else '-' }}</small>
+                    <br>
+                    {% set resol_status = ticket.sla_resolucao_status() %}
+                    {% if resol_status == 'ok' %}
+                    <span class="badge bg-success"><i class="bi bi-check"></i> Cumprido</span>
+                    {% elif resol_status == 'violado' %}
+                    <span class="badge bg-danger"><i class="bi bi-x"></i> Violado</span>
+                    {% else %}
+                    <span class="badge bg-warning text-dark"><i class="bi bi-clock"></i> Pendente</span>
+                    {% endif %}
+                </div>
+
+                {% if ticket.status not in ['resolvido', 'fechado'] %}
+                {% set horas_restantes = ticket.horas_uteis_restantes() %}
+                <div class="mt-3 pt-3 border-top">
+                    <strong>Tempo Restante</strong><br>
+                    {% if horas_restantes > 0 %}
+                    <span class="fs-5 {% if horas_restantes <= 2 %}text-danger{% elif horas_restantes <= 4 %}text-warning{% else %}text-success{% endif %}">
+                        <i class="bi bi-hourglass-split"></i>
+                        {{ "%.1f"|format(horas_restantes) }} horas úteis
+                    </span>
+                    {% else %}
+                    <span class="fs-5 text-danger">
+                        <i class="bi bi-exclamation-triangle"></i> SLA Expirado
+                    </span>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

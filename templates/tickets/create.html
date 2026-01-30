@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}Novo Chamado - Helpdesk{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-plus-circle"></i> Novo Chamado</h2>
+            <a href="{{ url_for('tickets.lista') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Voltar
+            </a>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label">Título *</label>
+                        <input type="text" name="titulo" class="form-control"
+                               placeholder="Descreva brevemente o problema" required minlength="5">
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Categoria</label>
+                            <select name="categoria_id" class="form-select">
+                                <option value="">Selecione...</option>
+                                {% for categoria in categorias %}
+                                <option value="{{ categoria.id }}">{{ categoria.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Prioridade</label>
+                            <select name="prioridade" class="form-select">
+                                <option value="baixa">Baixa</option>
+                                <option value="media" selected>Média</option>
+                                <option value="alta">Alta</option>
+                                <option value="critica">Crítica</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Descrição *</label>
+                        <textarea name="descricao" class="form-control" rows="6"
+                                  placeholder="Descreva detalhadamente o problema, incluindo passos para reproduzir, mensagens de erro, etc."
+                                  required minlength="10"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Anexos</label>
+                        <input type="file" name="anexos" class="form-control" multiple
+                               accept=".png,.jpg,.jpeg,.gif,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip">
+                        <div class="form-text">
+                            Formatos aceitos: imagens, PDF, documentos Office, TXT, ZIP. Máximo 10MB por arquivo.
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> Criar Chamado
+                        </button>
+                        <a href="{{ url_for('tickets.lista') }}" class="btn btn-outline-secondary">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Dicas</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Título:</strong> Seja claro e conciso. Ex: "Erro ao acessar sistema X"</p>
+                <p><strong>Prioridade:</strong></p>
+                <ul class="small">
+                    <li><span class="badge badge-prioridade-baixa">Baixa</span> - Problemas menores, sem urgência</li>
+                    <li><span class="badge badge-prioridade-media">Média</span> - Problemas que afetam o trabalho</li>
+                    <li><span class="badge badge-prioridade-alta">Alta</span> - Problemas urgentes</li>
+                    <li><span class="badge badge-prioridade-critica">Crítica</span> - Sistema parado, emergência</li>
+                </ul>
+                <p><strong>Descrição:</strong> Inclua todos os detalhes relevantes para facilitar o atendimento.</p>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clock"></i> SLA (Horas Úteis)</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info py-2 small mb-3">
+                    <i class="bi bi-info-circle"></i> Horário administrativo:<br>
+                    <strong>08:00 - 17:00</strong> (Segunda a Sexta)
+                </div>
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Prioridade</th>
+                            <th>Resposta</th>
+                            <th>Resolução</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Crítica</td>
+                            <td>1h</td>
+                            <td>4h</td>
+                        </tr>
+                        <tr>
+                            <td>Alta</td>
+                            <td>2h</td>
+                            <td>8h</td>
+                        </tr>
+                        <tr>
+                            <td>Média</td>
+                            <td>4h</td>
+                            <td>24h</td>
+                        </tr>
+                        <tr>
+                            <td>Baixa</td>
+                            <td>8h</td>
+                            <td>48h</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <small class="text-muted">
+                    Ex: Prioridade Alta criada às 16:00 de sexta = SLA até 10:00 de segunda.
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

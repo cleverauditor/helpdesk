@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}Usuários - Helpdesk{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-people"></i> Usuários</h2>
+    <a href="{{ url_for('users.criar') }}" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i> Novo Usuário
+    </a>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Tipo</label>
+                <select name="tipo" class="form-select">
+                    <option value="">Todos</option>
+                    <option value="admin" {% if request.args.get('tipo') == 'admin' %}selected{% endif %}>Admin</option>
+                    <option value="atendente" {% if request.args.get('tipo') == 'atendente' %}selected{% endif %}>Atendente</option>
+                    <option value="cliente_interno" {% if request.args.get('tipo') == 'cliente_interno' %}selected{% endif %}>Cliente Interno</option>
+                    <option value="cliente_externo" {% if request.args.get('tipo') == 'cliente_externo' %}selected{% endif %}>Cliente Externo</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Status</label>
+                <select name="ativo" class="form-select">
+                    <option value="">Todos</option>
+                    <option value="1" {% if request.args.get('ativo') == '1' %}selected{% endif %}>Ativos</option>
+                    <option value="0" {% if request.args.get('ativo') == '0' %}selected{% endif %}>Inativos</option>
+                </select>
+            </div>
+            <div class="col-md-5">
+                <label class="form-label">Buscar</label>
+                <input type="text" name="busca" class="form-control"
+                       placeholder="Nome ou email"
+                       value="{{ request.args.get('busca', '') }}">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-search"></i> Buscar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Lista -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Nome</th>
+                        <th>Email</th>
+                        <th>Tipo</th>
+                        <th>Departamento</th>
+                        <th>Status</th>
+                        <th>Criado em</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users.items %}
+                    <tr>
+                        <td>{{ user.nome }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>
+                            {% if user.tipo == 'admin' %}
+                            <span class="badge bg-danger">Admin</span>
+                            {% elif user.tipo == 'atendente' %}
+                            <span class="badge bg-primary">Atendente</span>
+                            {% elif user.tipo == 'cliente_interno' %}
+                            <span class="badge bg-info">Cliente Interno</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Cliente Externo</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ user.departamento or '-' }}</td>
+                        <td>
+                            {% if user.ativo %}
+                            <span class="badge bg-success">Ativo</span>
+                            {% else %}
+                            <span class="badge bg-danger">Inativo</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ user.criado_em.strftime('%d/%m/%Y') }}</td>
+                        <td>
+                            <a href="{{ url_for('users.editar', id=user.id) }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            {% if user.id != current_user.id %}
+                            <form method="POST" action="{{ url_for('users.toggle_ativo', id=user.id) }}"
+                                  style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-outline-{{ 'danger' if user.ativo else 'success' }}"
+                                        onclick="return confirm('{{ 'Desativar' if user.ativo else 'Ativar' }} este usuário?')">
+                                    <i class="bi bi-{{ 'x' if user.ativo else 'check' }}"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            Nenhum usuário encontrado
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Paginação -->
+    {% if users.pages > 1 %}
+    <div class="card-footer">
+        <nav>
+            <ul class="pagination mb-0 justify-content-center">
+                {% if users.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('users.lista', page=users.prev_num, **request.args) }}">
+                        Anterior
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for page_num in users.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                    {% if page_num %}
+                        <li class="page-item {% if page_num == users.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('users.lista', page=page_num, **request.args) }}">
+                                {{ page_num }}
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if users.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('users.lista', page=users.next_num, **request.args) }}">
+                        Próximo
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

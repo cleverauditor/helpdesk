@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Categorias - Helpdesk{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-tags"></i> Categorias</h2>
+</div>
+
+<div class="row">
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Nova Categoria</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('users.criar_categoria') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Nome *</label>
+                        <input type="text" name="nome" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descrição</label>
+                        <textarea name="descricao" class="form-control" rows="3"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-plus-lg"></i> Criar Categoria
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-list"></i> Categorias Cadastradas</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Nome</th>
+                                <th>Descrição</th>
+                                <th>Chamados</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for categoria in categorias %}
+                            <tr>
+                                <td><strong>{{ categoria.nome }}</strong></td>
+                                <td>{{ categoria.descricao or '-' }}</td>
+                                <td>{{ categoria.tickets.count() }}</td>
+                                <td>
+                                    {% if categoria.ativo %}
+                                    <span class="badge bg-success">Ativa</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">Inativa</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <form method="POST" action="{{ url_for('users.toggle_categoria', id=categoria.id) }}"
+                                          style="display: inline;">
+                                        <button type="submit"
+                                                class="btn btn-sm btn-outline-{{ 'danger' if categoria.ativo else 'success' }}"
+                                                onclick="return confirm('{{ 'Desativar' if categoria.ativo else 'Ativar' }} esta categoria?')">
+                                            <i class="bi bi-{{ 'x' if categoria.ativo else 'check' }}"></i>
+                                            {{ 'Desativar' if categoria.ativo else 'Ativar' }}
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">
+                                    Nenhuma categoria cadastrada
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

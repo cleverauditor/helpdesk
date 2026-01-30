@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Helpdesk{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-speedometer2"></i> Dashboard</h2>
+    <a href="{{ url_for('tickets.criar') }}" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i> Novo Chamado
+    </a>
+</div>
+
+<!-- Cards de Estatísticas -->
+<div class="row mb-4">
+    <div class="col-md-2">
+        <div class="card card-stat border-primary">
+            <div class="card-body">
+                <h3 class="mb-0">{{ stats.total }}</h3>
+                <small class="text-muted">Total</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card card-stat border-info">
+            <div class="card-body">
+                <h3 class="mb-0">{{ stats.abertos }}</h3>
+                <small class="text-muted">Abertos</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card card-stat border-warning">
+            <div class="card-body">
+                <h3 class="mb-0">{{ stats.em_andamento }}</h3>
+                <small class="text-muted">Em Andamento</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card card-stat border-secondary">
+            <div class="card-body">
+                <h3 class="mb-0">{{ stats.aguardando }}</h3>
+                <small class="text-muted">Aguardando</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card card-stat border-success">
+            <div class="card-body">
+                <h3 class="mb-0">{{ stats.resolvidos }}</h3>
+                <small class="text-muted">Resolvidos</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card card-stat border-purple" style="border-color: #6610f2 !important;">
+            <div class="card-body">
+                <h3 class="mb-0">{{ stats.fechados }}</h3>
+                <small class="text-muted">Fechados</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SLA e Gráficos -->
+<div class="row mb-4">
+    <!-- Indicadores SLA -->
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Status do SLA</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span><i class="bi bi-check-circle-fill text-success"></i> Dentro do Prazo</span>
+                    <span class="badge bg-success fs-6">{{ stats.sla_ok }}</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span><i class="bi bi-exclamation-triangle-fill text-warning"></i> Em Risco</span>
+                    <span class="badge bg-warning text-dark fs-6">{{ stats.sla_risco }}</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-x-circle-fill text-danger"></i> Violado</span>
+                    <span class="badge bg-danger fs-6">{{ stats.sla_violado }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico por Status -->
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Por Status</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="chartStatus" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico por Categoria -->
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Por Categoria</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="chartCategoria" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Gráfico Timeline e Chamados Urgentes -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-graph-up"></i> Chamados - Últimos 30 dias</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="chartTimeline" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+
+    {% if current_user.is_atendente() and chamados_urgentes %}
+    <div class="col-md-4">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Urgentes (SLA)</h5>
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for ticket in chamados_urgentes %}
+                    <li class="list-group-item">
+                        <a href="{{ url_for('tickets.visualizar', id=ticket.id) }}" class="text-decoration-none">
+                            <strong>#{{ ticket.id }}</strong> - {{ ticket.titulo[:30] }}...
+                        </a>
+                        <br>
+                        <small class="text-danger">
+                            <i class="bi bi-clock"></i>
+                            SLA: {{ ticket.sla_resolucao_limite.strftime('%d/%m %H:%M') }}
+                        </small>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Últimos Chamados -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-list-ul"></i> Últimos Chamados</h5>
+                <a href="{{ url_for('tickets.lista') }}" class="btn btn-sm btn-outline-primary">Ver Todos</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Título</th>
+                                <th>Status</th>
+                                <th>Prioridade</th>
+                                <th>Cliente</th>
+                                <th>Data</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ticket in ultimos_tickets %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('tickets.visualizar', id=ticket.id) }}">
+                                        {{ ticket.id }}
+                                    </a>
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('tickets.visualizar', id=ticket.id) }}" class="text-decoration-none">
+                                        {{ ticket.titulo[:50] }}{% if ticket.titulo|length > 50 %}...{% endif %}
+                                    </a>
+                                </td>
+                                <td>
+                                    <span class="badge badge-status-{{ ticket.status }}">
+                                        {{ ticket.status.replace('_', ' ').title() }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge badge-prioridade-{{ ticket.prioridade }}">
+                                        {{ ticket.prioridade.title() }}
+                                    </span>
+                                </td>
+                                <td>{{ ticket.cliente.nome }}</td>
+                                <td>{{ ticket.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">
+                                    Nenhum chamado encontrado
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Gráfico por Status
+fetch('/api/stats/por-status')
+    .then(r => r.json())
+    .then(data => {
+        new Chart(document.getElementById('chartStatus'), {
+            type: 'doughnut',
+            data: {
+                labels: data.labels,
+                datasets: [{
+                    data: data.data,
+                    backgroundColor: data.colors
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    });
+
+// Gráfico por Categoria
+fetch('/api/stats/por-categoria')
+    .then(r => r.json())
+    .then(data => {
+        new Chart(document.getElementById('chartCategoria'), {
+            type: 'bar',
+            data: {
+                labels: data.labels,
+                datasets: [{
+                    label: 'Chamados',
+                    data: data.data,
+                    backgroundColor: '#0d6efd'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    });
+
+// Gráfico Timeline
+fetch('/api/stats/timeline')
+    .then(r => r.json())
+    .then(data => {
+        new Chart(document.getElementById('chartTimeline'), {
+            type: 'line',
+            data: {
+                labels: data.labels,
+                datasets: [
+                    {
+                        label: 'Criados',
+                        data: data.criados,
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        fill: true
+                    },
+                    {
+                        label: 'Resolvidos',
+                        data: data.resolvidos,
+                        borderColor: '#198754',
+                        backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

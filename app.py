@@ -89,11 +89,11 @@ def init_data():
 
     # Criar categorias padrão
     categorias_padrao = [
-        ('Suporte Técnico', 'Problemas técnicos e dúvidas'),
-        ('Infraestrutura', 'Redes, servidores, equipamentos'),
-        ('Software', 'Instalação e configuração de programas'),
-        ('Hardware', 'Problemas com equipamentos'),
-        ('Acesso', 'Permissões e credenciais'),
+        ('Solicitação Geral', 'Solicitações gerais e dúvidas'),
+        ('Atendimento', 'Atendimento ao cliente'),
+        ('Serviços', 'Solicitações de serviços'),
+        ('Informações', 'Solicitações de informações'),
+        ('Sugestões', 'Sugestões e melhorias'),
         ('Outros', 'Outros assuntos')
     ]
     for nome, descricao in categorias_padrao:

@@ -64,15 +64,15 @@ def index():
 @dashboard_bp.route('/api/stats/por-status')
 @login_required
 def stats_por_status():
-    if current_user.is_cliente():
-        base_query = Ticket.query.filter_by(cliente_id=current_user.id)
-    else:
-        base_query = Ticket.query
-
-    resultado = db.session.query(
+    query = db.session.query(
         Ticket.status,
         func.count(Ticket.id)
-    ).group_by(Ticket.status).all()
+    )
+
+    if current_user.is_cliente():
+        query = query.filter(Ticket.cliente_id == current_user.id)
+
+    resultado = query.group_by(Ticket.status).all()
 
     labels = []
     data = []
@@ -96,11 +96,15 @@ def stats_por_status():
 @dashboard_bp.route('/api/stats/por-categoria')
 @login_required
 def stats_por_categoria():
-    resultado = db.session.query(
+    query = db.session.query(
         Category.nome,
         func.count(Ticket.id)
-    ).join(Ticket, Ticket.categoria_id == Category.id)\
-     .group_by(Category.nome).all()
+    ).join(Ticket, Ticket.categoria_id == Category.id)
+
+    if current_user.is_cliente():
+        query = query.filter(Ticket.cliente_id == current_user.id)
+
+    resultado = query.group_by(Category.nome).all()
 
     return jsonify({
         'labels': [r[0] for r in resultado],
@@ -116,18 +120,26 @@ def stats_timeline():
     inicio = hoje - timedelta(days=30)
 
     # Chamados criados por dia
-    criados = db.session.query(
+    query_criados = db.session.query(
         func.date(Ticket.criado_em),
         func.count(Ticket.id)
-    ).filter(Ticket.criado_em >= inicio)\
-     .group_by(func.date(Ticket.criado_em)).all()
+    ).filter(Ticket.criado_em >= inicio)
+
+    if current_user.is_cliente():
+        query_criados = query_criados.filter(Ticket.cliente_id == current_user.id)
+
+    criados = query_criados.group_by(func.date(Ticket.criado_em)).all()
 
     # Chamados fechados por dia
-    fechados = db.session.query(
+    query_fechados = db.session.query(
         func.date(Ticket.fechado_em),
         func.count(Ticket.id)
-    ).filter(Ticket.fechado_em >= inicio)\
-     .group_by(func.date(Ticket.fechado_em)).all()
+    ).filter(Ticket.fechado_em >= inicio)
+
+    if current_user.is_cliente():
+        query_fechados = query_fechados.filter(Ticket.cliente_id == current_user.id)
+
+    fechados = query_fechados.group_by(func.date(Ticket.fechado_em)).all()
 
     # Criar dicionários para lookup
     criados_dict = {str(d): c for d, c in criados}

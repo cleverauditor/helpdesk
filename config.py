@@ -9,6 +9,11 @@ class Config:
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
         'sqlite:///' + os.path.join(os.path.dirname(os.path.abspath(__file__)), 'helpdesk.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # Reconexão automática para MySQL (PythonAnywhere)
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_recycle': 280,  # Recicla conexões antes do timeout do MySQL (300s)
+        'pool_pre_ping': True  # Verifica conexão antes de usar
+    }
 
     # Upload
     UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')

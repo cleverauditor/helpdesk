@@ -98,14 +98,14 @@ def notify_status_update(ticket, old_status):
     """Notifica cliente sobre atualização de status"""
     subject = f'[Atendimento MaxVia] Chamado #{ticket.id} - Status Atualizado'
 
-    # Pegar último comentário
-    ultimo_historico = ticket.historicos.first()
+    # Pegar último comentário real (não a alteração de status)
+    ultimo_comentario = ticket.historicos.filter_by(acao='comentario').first()
     comentario_html = ''
-    if ultimo_historico and ultimo_historico.descricao:
+    if ultimo_comentario and ultimo_comentario.descricao:
         comentario_html = f'''
-        <p><strong>Comentário:</strong></p>
+        <p><strong>Último comentário:</strong></p>
         <p style="background-color: #f5f5f5; padding: 10px; border-left: 3px solid #00a8e8;">
-            {ultimo_historico.descricao}
+            {ultimo_comentario.descricao}
         </p>
         '''
 

@@ -1,6 +1,7 @@
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import formataddr
 from flask import current_app, render_template_string
 import threading
 
@@ -25,7 +26,7 @@ def send_email(subject, recipients, html_body, text_body=None):
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
-        msg['From'] = current_app.config['MAIL_DEFAULT_SENDER']
+        msg['From'] = formataddr(('MaxVia - Atendimento', current_app.config['MAIL_DEFAULT_SENDER']))
         msg['To'] = ', '.join(recipients) if isinstance(recipients, list) else recipients
 
         if text_body:

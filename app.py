@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+load_dotenv()  # Carrega variáveis do arquivo .env
+
 from flask import Flask, redirect, url_for
 from flask_login import LoginManager
 from config import Config

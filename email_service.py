@@ -56,7 +56,7 @@ def notify_new_ticket(ticket):
         return
 
     recipients = [a.email for a in atendentes]
-    subject = f'[Helpdesk] Novo Chamado #{ticket.id} - {ticket.titulo}'
+    subject = f'[Atendimento MaxVia] Novo Chamado #{ticket.id} - {ticket.titulo}'
 
     html_body = f'''
     <h2>Novo Chamado Aberto</h2>
@@ -78,7 +78,7 @@ def notify_ticket_assigned(ticket):
     if not ticket.atendente:
         return
 
-    subject = f'[Helpdesk] Chamado #{ticket.id} atribuído a você'
+    subject = f'[Atendimento MaxVia] Chamado #{ticket.id} atribuído a você'
 
     html_body = f'''
     <h2>Chamado Atribuído</h2>
@@ -96,7 +96,7 @@ def notify_ticket_assigned(ticket):
 
 def notify_status_update(ticket, old_status):
     """Notifica cliente sobre atualização de status"""
-    subject = f'[Helpdesk] Chamado #{ticket.id} - Status Atualizado'
+    subject = f'[Atendimento MaxVia] Chamado #{ticket.id} - Status Atualizado'
 
     html_body = f'''
     <h2>Atualização do Chamado</h2>

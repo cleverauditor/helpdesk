@@ -98,12 +98,24 @@ def notify_status_update(ticket, old_status):
     """Notifica cliente sobre atualização de status"""
     subject = f'[Atendimento MaxVia] Chamado #{ticket.id} - Status Atualizado'
 
+    # Pegar último comentário
+    ultimo_historico = ticket.historicos.first()
+    comentario_html = ''
+    if ultimo_historico and ultimo_historico.descricao:
+        comentario_html = f'''
+        <p><strong>Comentário:</strong></p>
+        <p style="background-color: #f5f5f5; padding: 10px; border-left: 3px solid #00a8e8;">
+            {ultimo_historico.descricao}
+        </p>
+        '''
+
     html_body = f'''
     <h2>Atualização do Chamado</h2>
     <p>O status do seu chamado foi atualizado.</p>
     <p><strong>Chamado:</strong> #{ticket.id} - {ticket.titulo}</p>
     <p><strong>Status Anterior:</strong> {old_status}</p>
     <p><strong>Novo Status:</strong> {ticket.status}</p>
+    {comentario_html}
     <hr>
     <p>Acesse o sistema para mais detalhes.</p>
     '''

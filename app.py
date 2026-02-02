@@ -1,6 +1,9 @@
 import os
 from dotenv import load_dotenv
-load_dotenv()  # Carrega variáveis do arquivo .env
+
+# Carrega variáveis do arquivo .env (caminho explícito para funcionar no WSGI)
+basedir = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(basedir, '.env'))
 
 from flask import Flask, redirect, url_for
 from flask_login import LoginManager

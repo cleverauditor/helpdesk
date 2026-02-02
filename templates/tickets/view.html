@@ -115,22 +115,26 @@
                                   placeholder="Digite seu comentário..." required></textarea>
                     </div>
 
-                    {% if current_user.is_atendente() %}
-                    <div class="mb-3">
-                        <label class="form-label">Tempo gasto (minutos)</label>
-                        <input type="number" name="tempo_gasto" class="form-control" min="0" value="0" style="max-width: 150px;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex gap-3 align-items-center">
+                            {% if current_user.is_atendente() %}
+                            <div class="d-flex align-items-center gap-2">
+                                <label class="form-label mb-0 small text-muted">Tempo (min):</label>
+                                <input type="number" name="tempo_gasto" class="form-control form-control-sm" min="0" value="0" style="width: 80px;">
+                            </div>
+                            {% endif %}
+                            <div>
+                                <label class="btn btn-outline-secondary btn-sm mb-0">
+                                    <i class="bi bi-paperclip"></i> Anexar
+                                    <input type="file" name="anexos" class="d-none" multiple
+                                           accept=".png,.jpg,.jpeg,.gif,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip">
+                                </label>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-send"></i> Enviar Comentário
+                        </button>
                     </div>
-                    {% endif %}
-
-                    <div class="mb-3">
-                        <label class="form-label">Anexar arquivos</label>
-                        <input type="file" name="anexos" class="form-control" multiple
-                               accept=".png,.jpg,.jpeg,.gif,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip">
-                    </div>
-
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-send"></i> Enviar
-                    </button>
                 </form>
             </div>
         </div>

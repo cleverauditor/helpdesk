@@ -7,6 +7,13 @@ from models import db, Ticket, User, Category, TicketHistory
 dashboard_bp = Blueprint('dashboard', __name__)
 
 
+def get_atendente_categorias_filter():
+    """Retorna filtro de categorias para atendente"""
+    categorias_ids = current_user.get_categorias_ids()
+    if categorias_ids:
+        return Ticket.categoria_id.in_(categorias_ids)
+    return None  # Sem categorias = vê todos
+
 @dashboard_bp.route('/')
 @login_required
 def index():
@@ -16,8 +23,12 @@ def index():
     elif current_user.is_admin():
         base_query = Ticket.query
     else:
-        # Atendente: apenas chamados atribuídos a ele
-        base_query = Ticket.query.filter_by(atendente_id=current_user.id)
+        # Atendente: chamados das suas categorias
+        filtro_cat = get_atendente_categorias_filter()
+        if filtro_cat is not None:
+            base_query = Ticket.query.filter(filtro_cat)
+        else:
+            base_query = Ticket.query
 
     stats = {
         'total': base_query.count(),
@@ -58,7 +69,9 @@ def index():
             Ticket.sla_resolucao_limite < now + timedelta(hours=4)
         )
         if not current_user.is_admin():
-            query_urgentes = query_urgentes.filter(Ticket.atendente_id == current_user.id)
+            filtro_cat = get_atendente_categorias_filter()
+            if filtro_cat is not None:
+                query_urgentes = query_urgentes.filter(filtro_cat)
         chamados_urgentes = query_urgentes.order_by(Ticket.sla_resolucao_limite).limit(5).all()
 
     return render_template('dashboard.html',
@@ -78,7 +91,9 @@ def stats_por_status():
     if current_user.is_cliente():
         query = query.filter(Ticket.cliente_id == current_user.id)
     elif not current_user.is_admin():
-        query = query.filter(Ticket.atendente_id == current_user.id)
+        filtro_cat = get_atendente_categorias_filter()
+        if filtro_cat is not None:
+            query = query.filter(filtro_cat)
 
     resultado = query.group_by(Ticket.status).all()
 
@@ -112,7 +127,9 @@ def stats_por_categoria():
     if current_user.is_cliente():
         query = query.filter(Ticket.cliente_id == current_user.id)
     elif not current_user.is_admin():
-        query = query.filter(Ticket.atendente_id == current_user.id)
+        filtro_cat = get_atendente_categorias_filter()
+        if filtro_cat is not None:
+            query = query.filter(filtro_cat)
 
     resultado = query.group_by(Category.nome).all()
 
@@ -138,7 +155,9 @@ def stats_timeline():
     if current_user.is_cliente():
         query_criados = query_criados.filter(Ticket.cliente_id == current_user.id)
     elif not current_user.is_admin():
-        query_criados = query_criados.filter(Ticket.atendente_id == current_user.id)
+        filtro_cat = get_atendente_categorias_filter()
+        if filtro_cat is not None:
+            query_criados = query_criados.filter(filtro_cat)
 
     criados = query_criados.group_by(func.date(Ticket.criado_em)).all()
 
@@ -151,7 +170,9 @@ def stats_timeline():
     if current_user.is_cliente():
         query_fechados = query_fechados.filter(Ticket.cliente_id == current_user.id)
     elif not current_user.is_admin():
-        query_fechados = query_fechados.filter(Ticket.atendente_id == current_user.id)
+        filtro_cat = get_atendente_categorias_filter()
+        if filtro_cat is not None:
+            query_fechados = query_fechados.filter(filtro_cat)
 
     fechados = query_fechados.group_by(func.date(Ticket.fechado_em)).all()
 

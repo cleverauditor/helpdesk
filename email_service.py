@@ -1,17 +1,25 @@
 import smtplib
+import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from flask import current_app, render_template_string
 import threading
+
+def log_email(msg):
+    """Escreve log em arquivo para debug"""
+    log_path = os.path.join(os.path.dirname(__file__), 'email_debug.log')
+    with open(log_path, 'a') as f:
+        from datetime import datetime
+        f.write(f'{datetime.now()} - {msg}\n')
 
 
 def send_email_async(app, msg, recipients):
     """Envia email de forma assíncrona"""
     with app.app_context():
         try:
-            print(f'[EMAIL] Enviando para: {recipients}')
-            print(f'[EMAIL] Servidor: {current_app.config["MAIL_SERVER"]}')
-            print(f'[EMAIL] Usuario: {current_app.config["MAIL_USERNAME"]}')
+            log_email(f'Enviando para: {recipients}')
+            log_email(f'Servidor: {current_app.config["MAIL_SERVER"]}')
+            log_email(f'Usuario: {current_app.config["MAIL_USERNAME"]}')
             with smtplib.SMTP(current_app.config['MAIL_SERVER'],
                             current_app.config['MAIL_PORT']) as server:
                 server.starttls()
@@ -19,9 +27,9 @@ def send_email_async(app, msg, recipients):
                     server.login(current_app.config['MAIL_USERNAME'],
                                current_app.config['MAIL_PASSWORD'])
                 server.send_message(msg)
-                print(f'[EMAIL] Enviado com sucesso!')
+                log_email('Enviado com sucesso!')
         except Exception as e:
-            print(f'[EMAIL] ERRO: {e}')
+            log_email(f'ERRO: {e}')
             current_app.logger.error(f'Erro ao enviar email: {e}')
 
 
@@ -101,7 +109,7 @@ def notify_ticket_assigned(ticket):
 
 def notify_status_update(ticket, old_status):
     """Notifica cliente sobre atualização de status"""
-    print(f'[EMAIL] notify_status_update chamado - Ticket #{ticket.id}, Cliente: {ticket.cliente.email}')
+    log_email(f'notify_status_update chamado - Ticket #{ticket.id}, Cliente: {ticket.cliente.email}')
     subject = f'[Atendimento MaxVia] Chamado #{ticket.id} - Status Atualizado'
 
     html_body = f'''

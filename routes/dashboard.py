@@ -77,7 +77,7 @@ def stats_por_status():
     labels = []
     data = []
     colors = {
-        'aberto': '#f7941d',
+        'aberto': '#00a8e8',
         'em_andamento': '#ffc107',
         'fechado': '#198754'
     }

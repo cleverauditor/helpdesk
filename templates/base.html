@@ -9,10 +9,11 @@
     <style>
         :root {
             --sidebar-width: 250px;
-            --maxsim-orange: #f7941d;
-            --maxsim-gray: #58595b;
-            --maxsim-light-gray: #9d9d9c;
-            --maxsim-dark: #333333;
+            --maxvia-blue: #00a8e8;
+            --maxvia-dark-blue: #0077b6;
+            --maxvia-gray: #58595b;
+            --maxvia-silver: #a8a8a8;
+            --maxvia-dark: #2c3e50;
         }
         body {
             min-height: 100vh;
@@ -20,7 +21,7 @@
         .sidebar {
             width: var(--sidebar-width);
             min-height: 100vh;
-            background: var(--maxsim-dark);
+            background: var(--maxvia-dark);
             position: fixed;
             left: 0;
             top: 0;
@@ -34,12 +35,12 @@
         .sidebar .nav-link:hover {
             color: #fff;
             background: rgba(255,255,255,.1);
-            border-left-color: var(--maxsim-light-gray);
+            border-left-color: var(--maxvia-silver);
         }
         .sidebar .nav-link.active {
             color: #fff;
-            background: rgba(247, 148, 29, 0.15);
-            border-left-color: var(--maxsim-orange);
+            background: rgba(0, 168, 232, 0.15);
+            border-left-color: var(--maxvia-blue);
         }
         .sidebar .nav-link i {
             margin-right: 10px;
@@ -62,7 +63,7 @@
         }
         .sidebar-brand small {
             display: block;
-            color: var(--maxsim-orange);
+            color: var(--maxvia-blue);
             font-size: 0.75rem;
             padding: 10px 0;
             letter-spacing: 1px;
@@ -76,35 +77,34 @@
             border-top: 1px solid rgba(255,255,255,.1);
         }
         .btn-primary {
-            background-color: var(--maxsim-orange);
-            border-color: var(--maxsim-orange);
+            background-color: var(--maxvia-blue);
+            border-color: var(--maxvia-blue);
         }
         .btn-primary:hover {
-            background-color: #e8860a;
-            border-color: #e8860a;
+            background-color: var(--maxvia-dark-blue);
+            border-color: var(--maxvia-dark-blue);
         }
         .btn-outline-primary {
-            color: var(--maxsim-orange);
-            border-color: var(--maxsim-orange);
+            color: var(--maxvia-blue);
+            border-color: var(--maxvia-blue);
         }
         .btn-outline-primary:hover {
-            background-color: var(--maxsim-orange);
-            border-color: var(--maxsim-orange);
+            background-color: var(--maxvia-blue);
+            border-color: var(--maxvia-blue);
         }
         a {
-            color: var(--maxsim-orange);
+            color: var(--maxvia-blue);
         }
         a:hover {
-            color: #e8860a;
+            color: var(--maxvia-dark-blue);
         }
         .badge-prioridade-critica { background-color: #dc3545; }
-        .badge-prioridade-alta { background-color: var(--maxsim-orange); }
+        .badge-prioridade-alta { background-color: #fd7e14; }
         .badge-prioridade-media { background-color: #ffc107; color: #000; }
         .badge-prioridade-baixa { background-color: #198754; }
-        .badge-status-aberto { background-color: var(--maxsim-orange); }
+        .badge-status-aberto { background-color: var(--maxvia-blue); }
         .badge-status-em_andamento { background-color: #ffc107; color: #000; }
-        .badge-status-fechado { background-color: #198754; }
-        .badge-status-fechado { background-color: var(--maxsim-dark); }
+        .badge-status-fechado { background-color: var(--maxvia-dark); }
         .sla-ok { color: #198754; }
         .sla-risco { color: #ffc107; }
         .sla-violado { color: #dc3545; }
@@ -140,17 +140,17 @@
             width: 18px;
             height: 18px;
             border-radius: 50%;
-            background: var(--maxsim-orange);
+            background: var(--maxvia-blue);
             border: 3px solid #fff;
         }
         .text-primary {
-            color: var(--maxsim-orange) !important;
+            color: var(--maxvia-blue) !important;
         }
         .bg-primary {
-            background-color: var(--maxsim-orange) !important;
+            background-color: var(--maxvia-blue) !important;
         }
         .border-primary {
-            border-color: var(--maxsim-orange) !important;
+            border-color: var(--maxvia-blue) !important;
         }
         @media (max-width: 768px) {
             .sidebar {
@@ -170,9 +170,9 @@
     <nav class="sidebar">
         <div class="sidebar-brand">
             <div class="logo-container">
-                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Maxsim">
+                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="MaxVia">
             </div>
-            <small>HELPDESK</small>
+            <small>ATENDIMENTO</small>
         </div>
         <ul class="nav flex-column mt-3">
             <li class="nav-item">

@@ -36,12 +36,14 @@ def create_app():
     from routes.users import users_bp
     from routes.dashboard import dashboard_bp
     from routes.reports import reports_bp
+    from routes.auditoria import auditoria_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(tickets_bp)
     app.register_blueprint(users_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(reports_bp)
+    app.register_blueprint(auditoria_bp)
 
     # Rota raiz
     @app.route('/')
@@ -100,7 +102,8 @@ def init_data():
         ('Serviços', 'Solicitações de serviços'),
         ('Informações', 'Solicitações de informações'),
         ('Sugestões', 'Sugestões e melhorias'),
-        ('Outros', 'Outros assuntos')
+        ('Outros', 'Outros assuntos'),
+        ('Auditoria', 'Acesso ao módulo de auditoria de rotas')
     ]
     for nome, descricao in categorias_padrao:
         if not Category.query.filter_by(nome=nome).first():

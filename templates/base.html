@@ -207,6 +207,13 @@
                 </a>
             </li>
             {% endif %}
+            {% if current_user.is_admin() or current_user.categorias.filter_by(nome='Auditoria').first() %}
+            <li class="nav-item">
+                <a class="nav-link {% if 'auditoria' in request.endpoint %}active{% endif %}" href="{{ url_for('auditoria.lista_rotas') }}">
+                    <i class="bi bi-signpost-2"></i> Auditoria
+                </a>
+            </li>
+            {% endif %}
         </ul>
         <div class="sidebar-footer">
             <div class="text-white-50 small mb-2">

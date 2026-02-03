@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+
+{% block title %}Modais - Auditoria{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-truck"></i> Modais de Veículos</h2>
+    <a href="{{ url_for('auditoria.lista_rotas') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar para Rotas
+    </a>
+</div>
+
+<div class="row">
+    <!-- Formulário de Criação -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-plus-circle"></i> Novo Modal
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('auditoria.criar_modal') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Nome *</label>
+                        <input type="text" name="nome" class="form-control" required
+                               placeholder="Ex: Ônibus, Van, Micro-ônibus">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descrição</label>
+                        <textarea name="descricao" class="form-control" rows="3"
+                                  placeholder="Descrição opcional do modal"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-check-lg"></i> Criar Modal
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Modais -->
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-list"></i> Modais Cadastrados
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Nome</th>
+                                <th>Descrição</th>
+                                <th>Rotas</th>
+                                <th>Status</th>
+                                <th width="100">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for modal in modais %}
+                            <tr>
+                                <td><strong>{{ modal.nome }}</strong></td>
+                                <td>{{ modal.descricao or '-' }}</td>
+                                <td>{{ modal.rotas.count() }}</td>
+                                <td>
+                                    {% if modal.ativo %}
+                                    <span class="badge bg-success">Ativo</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Inativo</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <form method="POST" action="{{ url_for('auditoria.toggle_modal', id=modal.id) }}" style="display:inline">
+                                        <button type="submit" class="btn btn-sm btn-outline-{{ 'danger' if modal.ativo else 'success' }}"
+                                                title="{{ 'Desativar' if modal.ativo else 'Ativar' }}">
+                                            <i class="bi bi-{{ 'x-circle' if modal.ativo else 'check-circle' }}"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">
+                                    Nenhum modal cadastrado.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

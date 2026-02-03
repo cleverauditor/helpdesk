@@ -1,0 +1,169 @@
+{% extends 'base.html' %}
+
+{% block title %}Relatórios de Auditoria{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-file-earmark-bar-graph"></i> Relatórios de Auditoria</h2>
+    <a href="{{ url_for('auditoria.lista_rotas') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-funnel"></i> Filtros
+    </div>
+    <div class="card-body">
+        <form method="GET" class="row g-3" id="formFiltros">
+            <div class="col-md-4">
+                <label class="form-label">Cliente</label>
+                <select name="cliente_id" class="form-select">
+                    <option value="">Todos os Clientes</option>
+                    {% for cliente in clientes %}
+                    <option value="{{ cliente.id }}" {{ 'selected' if request.args.get('cliente_id', type=int) == cliente.id }}>
+                        {{ cliente.nome }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Data Início</label>
+                <input type="date" name="data_inicio" class="form-control"
+                       value="{{ request.args.get('data_inicio', '') }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Data Fim</label>
+                <input type="date" name="data_fim" class="form-control"
+                       value="{{ request.args.get('data_fim', '') }}">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-search"></i> Filtrar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Resumo -->
+{% if auditorias %}
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card card-stat border-primary">
+            <div class="card-body">
+                <h5 class="card-title text-primary">{{ auditorias|length }}</h5>
+                <p class="card-text text-muted">Auditorias Realizadas</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-stat border-success">
+            <div class="card-body">
+                {% set rotas_unicas = auditorias|map(attribute='rota_id')|list|unique|list|length %}
+                <h5 class="card-title text-success">{{ rotas_unicas }}</h5>
+                <p class="card-text text-muted">Rotas Auditadas</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-stat border-info">
+            <div class="card-body">
+                {% set km_total = auditorias|selectattr('km_percorrido')|map(attribute='km_percorrido')|sum %}
+                <h5 class="card-title text-info">{{ "%.2f"|format(km_total) }} km</h5>
+                <p class="card-text text-muted">KM Total Auditado</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-stat border-warning">
+            <div class="card-body">
+                {% set aderencias = auditorias|selectattr('aderencia_percentual')|map(attribute='aderencia_percentual')|list %}
+                {% if aderencias %}
+                <h5 class="card-title text-warning">{{ "%.1f"|format(aderencias|sum / aderencias|length) }}%</h5>
+                {% else %}
+                <h5 class="card-title text-warning">-</h5>
+                {% endif %}
+                <p class="card-text text-muted">Aderência Média</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Tabela de Resultados -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-table"></i> Auditorias</span>
+        {% if auditorias %}
+        <form method="POST" action="{{ url_for('auditoria.exportar_relatorio') }}" style="display:inline">
+            <input type="hidden" name="cliente_id" value="{{ request.args.get('cliente_id', '') }}">
+            <input type="hidden" name="data_inicio" value="{{ request.args.get('data_inicio', '') }}">
+            <input type="hidden" name="data_fim" value="{{ request.args.get('data_fim', '') }}">
+            <button type="submit" class="btn btn-sm btn-outline-success">
+                <i class="bi bi-download"></i> Exportar CSV
+            </button>
+        </form>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Data</th>
+                        <th>Rota</th>
+                        <th>Cliente</th>
+                        <th>Atendente</th>
+                        <th>KM Plan.</th>
+                        <th>KM Perc.</th>
+                        <th>Desvio Máx</th>
+                        <th>Aderência</th>
+                        <th>Fora Rota</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for auditoria in auditorias %}
+                    <tr>
+                        <td>{{ auditoria.data_auditoria.strftime('%d/%m/%Y') }}</td>
+                        <td>
+                            <a href="{{ url_for('auditoria.visualizar_rota', id=auditoria.rota.id) }}">
+                                {{ auditoria.rota.tag }}
+                            </a>
+                        </td>
+                        <td>{{ auditoria.rota.cliente.nome }}</td>
+                        <td>{{ auditoria.atendente.nome }}</td>
+                        <td>{{ auditoria.km_planejado or '-' }}</td>
+                        <td>{{ auditoria.km_percorrido or '-' }}</td>
+                        <td>
+                            {% if auditoria.desvio_maximo_metros %}
+                            {{ "%.0f"|format(auditoria.desvio_maximo_metros) }}m
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if auditoria.aderencia_percentual is not none %}
+                            <span class="badge bg-{{ 'success' if auditoria.aderencia_percentual >= 90 else 'warning' if auditoria.aderencia_percentual >= 70 else 'danger' }}">
+                                {{ auditoria.aderencia_percentual }}%
+                            </span>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>{{ auditoria.pontos_fora_rota or '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-4">
+                            Nenhuma auditoria encontrada com os filtros selecionados.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

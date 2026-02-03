@@ -1,0 +1,198 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ 'Editar' if cliente else 'Novo' }} Cliente - Auditoria{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>
+        <i class="bi bi-building"></i>
+        {{ 'Editar Cliente: ' + cliente.nome if cliente else 'Novo Cliente' }}
+    </h2>
+    <a href="{{ url_for('auditoria.lista_clientes') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-pencil"></i> Dados do Cliente
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Nome Fantasia *</label>
+                                <input type="text" name="nome" class="form-control" required
+                                       value="{{ cliente.nome if cliente else '' }}"
+                                       placeholder="Nome do cliente/empresa">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Razão Social</label>
+                                <input type="text" name="razao_social" class="form-control"
+                                       value="{{ cliente.razao_social if cliente else '' }}"
+                                       placeholder="Razão social completa">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">CNPJ</label>
+                                <input type="text" name="cnpj" class="form-control"
+                                       value="{{ cliente.cnpj if cliente else '' }}"
+                                       placeholder="00.000.000/0000-00">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Telefone</label>
+                                <input type="text" name="telefone" class="form-control"
+                                       value="{{ cliente.telefone if cliente else '' }}"
+                                       placeholder="(00) 0000-0000">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">E-mail</label>
+                                <input type="email" name="email" class="form-control"
+                                       value="{{ cliente.email if cliente else '' }}"
+                                       placeholder="email@empresa.com">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Endereço</label>
+                        <input type="text" name="endereco" class="form-control"
+                               value="{{ cliente.endereco if cliente else '' }}"
+                               placeholder="Rua, número, bairro">
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label class="form-label">Cidade</label>
+                                <input type="text" name="cidade" class="form-control"
+                                       value="{{ cliente.cidade if cliente else '' }}"
+                                       placeholder="Cidade">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">UF</label>
+                                <select name="estado" class="form-select">
+                                    <option value="">Selecione</option>
+                                    {% set estados = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'] %}
+                                    {% for uf in estados %}
+                                    <option value="{{ uf }}" {{ 'selected' if cliente and cliente.estado == uf }}>{{ uf }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Contato Principal</label>
+                                <input type="text" name="contato" class="form-control"
+                                       value="{{ cliente.contato if cliente else '' }}"
+                                       placeholder="Nome do contato">
+                            </div>
+                        </div>
+                        {% if cliente %}
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Status</label>
+                                <div class="form-check form-switch mt-2">
+                                    <input class="form-check-input" type="checkbox" name="ativo" value="1"
+                                           {{ 'checked' if cliente.ativo }}>
+                                    <label class="form-check-label">Ativo</label>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Observações</label>
+                        <textarea name="observacoes" class="form-control" rows="3"
+                                  placeholder="Observações sobre o cliente">{{ cliente.observacoes if cliente else '' }}</textarea>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> {{ 'Salvar Alterações' if cliente else 'Cadastrar Cliente' }}
+                        </button>
+                        <a href="{{ url_for('auditoria.lista_clientes') }}" class="btn btn-outline-secondary">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        {% if cliente %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-signpost-2"></i> Rotas do Cliente
+            </div>
+            <div class="card-body">
+                {% set rotas_cliente = cliente.rotas.filter_by(ativo=True).all() %}
+                {% if rotas_cliente %}
+                <ul class="list-group list-group-flush">
+                    {% for rota in rotas_cliente[:5] %}
+                    <li class="list-group-item px-0">
+                        <a href="{{ url_for('auditoria.visualizar_rota', id=rota.id) }}">
+                            {{ rota.tag }}
+                        </a>
+                        {% if rota.nome %}<small class="text-muted d-block">{{ rota.nome }}</small>{% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% if cliente.rotas.count() > 5 %}
+                <small class="text-muted">E mais {{ cliente.rotas.count() - 5 }} rotas...</small>
+                {% endif %}
+                {% else %}
+                <p class="text-muted mb-0">Nenhuma rota cadastrada.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-clock-history"></i> Informações
+            </div>
+            <div class="card-body small">
+                <p class="mb-1">
+                    <strong>Criado em:</strong><br>
+                    {{ cliente.criado_em.strftime('%d/%m/%Y %H:%M') }}
+                </p>
+                <p class="mb-0">
+                    <strong>Atualizado em:</strong><br>
+                    {{ cliente.atualizado_em.strftime('%d/%m/%Y %H:%M') }}
+                </p>
+            </div>
+        </div>
+        {% else %}
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Informações
+            </div>
+            <div class="card-body small text-muted">
+                <p>Cadastre os dados da empresa cliente.</p>
+                <p class="mb-0">Após o cadastro, você poderá associar rotas a este cliente.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

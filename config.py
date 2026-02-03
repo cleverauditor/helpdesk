@@ -20,6 +20,9 @@ class Config:
     MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10MB max file size
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'zip'}
 
+    # Extensões permitidas para arquivos KML (módulo de auditoria)
+    ALLOWED_KML_EXTENSIONS = {'kml', 'kmz'}
+
     # Email (configure with your SMTP server)
     MAIL_SERVER = os.environ.get('MAIL_SERVER') or 'smtp.gmail.com'
     MAIL_PORT = int(os.environ.get('MAIL_PORT') or 587)

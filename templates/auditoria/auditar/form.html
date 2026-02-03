@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+
+{% block title %}Auditar Rota {{ rota.tag }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-clipboard-check"></i> Auditar: {{ rota.tag }}</h2>
+    <a href="{{ url_for('auditoria.visualizar_rota', id=rota.id) }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar para Rota
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-upload"></i> Importar Dados do Rastreador
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label">Arquivo KML do Rastreador *</label>
+                        <input type="file" name="arquivo_kml" class="form-control" accept=".kml,.kmz" required>
+                        <div class="form-text">
+                            Selecione o arquivo KML ou KMZ exportado do rastreador com a rota executada.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Data da Auditoria</label>
+                        <input type="date" name="data_auditoria" class="form-control"
+                               value="{{ now.strftime('%Y-%m-%d') }}">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Observações</label>
+                        <textarea name="observacoes" class="form-control" rows="4"
+                                  placeholder="Observações sobre a auditoria (opcional)"></textarea>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>O que será analisado:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Distância total percorrida (km)</li>
+                            <li>Comparação com rota planejada (se disponível)</li>
+                            <li>Desvio máximo da rota</li>
+                            <li>Percentual de aderência</li>
+                            <li>Pontos fora do trajeto planejado</li>
+                        </ul>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-check-lg"></i> Processar Auditoria
+                        </button>
+                        <a href="{{ url_for('auditoria.visualizar_rota', id=rota.id) }}" class="btn btn-outline-secondary">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <!-- Informações da Rota -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-signpost-2"></i> Rota Selecionada
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless table-sm mb-0">
+                    <tr>
+                        <td class="text-muted">Tag:</td>
+                        <td><strong>{{ rota.tag }}</strong></td>
+                    </tr>
+                    {% if rota.nome %}
+                    <tr>
+                        <td class="text-muted">Nome:</td>
+                        <td>{{ rota.nome }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <td class="text-muted">Cliente:</td>
+                        <td>{{ rota.cliente.nome }}</td>
+                    </tr>
+                    {% if rota.modal %}
+                    <tr>
+                        <td class="text-muted">Modal:</td>
+                        <td>{{ rota.modal.nome }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <td class="text-muted">KM Atual:</td>
+                        <td>{{ rota.km_atual }} km</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">KML Planejado:</td>
+                        <td>
+                            {% if rota.arquivo_kml %}
+                            <span class="text-success"><i class="bi bi-check-circle"></i> Disponível</span>
+                            {% else %}
+                            <span class="text-warning"><i class="bi bi-exclamation-triangle"></i> Não enviado</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Última Auditoria -->
+        {% set ultima_auditoria = rota.auditorias.first() %}
+        {% if ultima_auditoria %}
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-clock-history"></i> Última Auditoria
+            </div>
+            <div class="card-body">
+                <p class="mb-1 small">
+                    <strong>Data:</strong> {{ ultima_auditoria.data_auditoria.strftime('%d/%m/%Y') }}
+                </p>
+                <p class="mb-1 small">
+                    <strong>Atendente:</strong> {{ ultima_auditoria.atendente.nome }}
+                </p>
+                {% if ultima_auditoria.km_percorrido %}
+                <p class="mb-1 small">
+                    <strong>KM Percorrido:</strong> {{ ultima_auditoria.km_percorrido }} km
+                </p>
+                {% endif %}
+                {% if ultima_auditoria.aderencia_percentual is not none %}
+                <p class="mb-0 small">
+                    <strong>Aderência:</strong> {{ ultima_auditoria.aderencia_percentual }}%
+                </p>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

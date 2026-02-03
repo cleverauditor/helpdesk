@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+
+{% block title %}Auditorias Realizadas{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-clipboard-check"></i> Auditorias Realizadas</h2>
+    <div>
+        <a href="{{ url_for('auditoria.selecionar_rota_auditoria') }}" class="btn btn-success me-2">
+            <i class="bi bi-plus"></i> Nova Auditoria
+        </a>
+        <a href="{{ url_for('auditoria.lista_rotas') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Rota</label>
+                <select name="rota_id" class="form-select">
+                    <option value="">Todas</option>
+                    {% for rota in rotas %}
+                    <option value="{{ rota.id }}" {{ 'selected' if request.args.get('rota_id')|int == rota.id }}>
+                        {{ rota.tag }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Cliente</label>
+                <select name="cliente_id" class="form-select">
+                    <option value="">Todos</option>
+                    {% for cliente in clientes %}
+                    <option value="{{ cliente.id }}" {{ 'selected' if request.args.get('cliente_id')|int == cliente.id }}>
+                        {{ cliente.nome }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Data Início</label>
+                <input type="date" name="data_inicio" class="form-control"
+                       value="{{ request.args.get('data_inicio', '') }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Data Fim</label>
+                <input type="date" name="data_fim" class="form-control"
+                       value="{{ request.args.get('data_fim', '') }}">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary me-2">
+                    <i class="bi bi-search"></i> Filtrar
+                </button>
+                <a href="{{ url_for('auditoria.lista_auditorias') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-lg"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Lista de Auditorias -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Data</th>
+                        <th>Rota</th>
+                        <th>Cliente</th>
+                        <th>Atendente</th>
+                        <th>KM Planejado</th>
+                        <th>KM Percorrido</th>
+                        <th>Aderência</th>
+                        <th width="100">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for auditoria in auditorias.items %}
+                    <tr>
+                        <td>{{ auditoria.data_auditoria.strftime('%d/%m/%Y') }}</td>
+                        <td>
+                            <a href="{{ url_for('auditoria.visualizar_rota', id=auditoria.rota.id) }}">
+                                {{ auditoria.rota.tag }}
+                            </a>
+                        </td>
+                        <td>{{ auditoria.rota.cliente.nome }}</td>
+                        <td>{{ auditoria.atendente.nome }}</td>
+                        <td>{{ auditoria.km_planejado or auditoria.rota.km_atual or '-' }} km</td>
+                        <td>{{ auditoria.km_percorrido or '-' }} km</td>
+                        <td>
+                            {% if auditoria.aderencia_percentual is not none %}
+                            <span class="badge bg-{{ 'success' if auditoria.aderencia_percentual >= 90 else 'warning' if auditoria.aderencia_percentual >= 70 else 'danger' }}">
+                                {{ auditoria.aderencia_percentual }}%
+                            </span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('auditoria.download_kml', tipo='auditoria', id=auditoria.id) }}"
+                               class="btn btn-sm btn-outline-primary" title="Baixar KML">
+                                <i class="bi bi-download"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            Nenhuma auditoria encontrada.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if auditorias.pages > 1 %}
+    <div class="card-footer">
+        <nav>
+            <ul class="pagination mb-0 justify-content-center">
+                {% if auditorias.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('auditoria.lista_auditorias', page=auditorias.prev_num, **request.args) }}">
+                        Anterior
+                    </a>
+                </li>
+                {% endif %}
+
+                <li class="page-item disabled">
+                    <span class="page-link">Página {{ auditorias.page }} de {{ auditorias.pages }}</span>
+                </li>
+
+                {% if auditorias.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('auditoria.lista_auditorias', page=auditorias.next_num, **request.args) }}">
+                        Próxima
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+
+{% block title %}Selecionar Rota - Auditoria{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-clipboard-check"></i> Realizar Auditoria</h2>
+    <a href="{{ url_for('auditoria.lista_rotas') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <i class="bi bi-signpost-2"></i> Selecione a Rota para Auditar
+    </div>
+    <div class="card-body">
+        {% if rotas %}
+        <div class="row">
+            {% for rota in rotas %}
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ rota.tag }}</h5>
+                        {% if rota.nome %}
+                        <p class="card-text text-muted">{{ rota.nome }}</p>
+                        {% endif %}
+                        <p class="card-text small">
+                            <strong>Cliente:</strong> {{ rota.cliente.nome }}<br>
+                            {% if rota.modal %}
+                            <strong>Modal:</strong> {{ rota.modal.nome }}<br>
+                            {% endif %}
+                            <strong>KM:</strong> {{ rota.km_atual }} km
+                        </p>
+                    </div>
+                    <div class="card-footer bg-transparent">
+                        <a href="{{ url_for('auditoria.processar_auditoria', rota_id=rota.id) }}"
+                           class="btn btn-success w-100">
+                            <i class="bi bi-clipboard-check"></i> Auditar
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-4">
+            <p class="text-muted">Nenhuma rota ativa encontrada.</p>
+            <a href="{{ url_for('auditoria.criar_rota') }}" class="btn btn-primary">
+                <i class="bi bi-plus"></i> Cadastrar Rota
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

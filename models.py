@@ -323,3 +323,194 @@ class Attachment(db.Model):
 
     def __repr__(self):
         return f'<Attachment {self.nome_arquivo}>'
+
+
+# ============================================
+# MÓDULO DE AUDITORIA DE ROTAS
+# ============================================
+
+class Cliente(db.Model):
+    """Cadastro de clientes/empresas para auditoria de rotas"""
+    __tablename__ = 'clientes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(200), nullable=False)
+    razao_social = db.Column(db.String(200))
+    cnpj = db.Column(db.String(20), unique=True)
+    endereco = db.Column(db.String(300))
+    cidade = db.Column(db.String(100))
+    estado = db.Column(db.String(2))
+    telefone = db.Column(db.String(20))
+    email = db.Column(db.String(120))
+    contato = db.Column(db.String(100))  # Nome do contato principal
+    observacoes = db.Column(db.Text)
+
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+
+    # Relacionamentos
+    rotas = db.relationship('Rota', backref='cliente', lazy='dynamic')
+
+    def __repr__(self):
+        return f'<Cliente {self.nome}>'
+
+
+class TurnoPadrao(db.Model):
+    """Turnos pré-definidos que podem ser associados às rotas"""
+    __tablename__ = 'turnos_padrao'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False)
+    horario_inicio = db.Column(db.Time, nullable=False)
+    horario_termino = db.Column(db.Time, nullable=False)
+    descricao = db.Column(db.Text)
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+
+    def horario_formatado(self):
+        """Retorna horário formatado (ex: 06:00 - 14:00)"""
+        return f'{self.horario_inicio.strftime("%H:%M")} - {self.horario_termino.strftime("%H:%M")}'
+
+    def __repr__(self):
+        return f'<TurnoPadrao {self.nome}>'
+
+
+class Modal(db.Model):
+    """Tipos de veículos/modais de transporte"""
+    __tablename__ = 'modais'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False, unique=True)
+    descricao = db.Column(db.Text)
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+
+    # Relacionamentos
+    rotas = db.relationship('Rota', backref='modal', lazy='dynamic')
+
+    def __repr__(self):
+        return f'<Modal {self.nome}>'
+
+
+class Rota(db.Model):
+    """Cadastro de rotas de transporte"""
+    __tablename__ = 'rotas'
+
+    id = db.Column(db.Integer, primary_key=True)
+    tag = db.Column(db.String(50), nullable=False, unique=True)
+    nome = db.Column(db.String(200))
+
+    # Arquivo KML da rota planejada
+    arquivo_kml = db.Column(db.String(500))
+    arquivo_kml_nome = db.Column(db.String(255))
+
+    # Relacionamento com cliente (empresa)
+    cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False)
+
+    # Dados operacionais
+    km_atual = db.Column(db.Float, default=0)
+    modal_id = db.Column(db.Integer, db.ForeignKey('modais.id'))
+    data_implantacao = db.Column(db.Date)
+
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+
+    # Relacionamentos
+    turnos = db.relationship('RotaTurno', backref='rota', lazy='dynamic',
+                             order_by='RotaTurno.horario_inicio')
+    historicos = db.relationship('RotaHistory', backref='rota', lazy='dynamic',
+                                  order_by='RotaHistory.criado_em.desc()')
+    auditorias = db.relationship('Auditoria', backref='rota', lazy='dynamic',
+                                  order_by='Auditoria.criado_em.desc()')
+
+    def __repr__(self):
+        return f'<Rota {self.tag}>'
+
+
+class RotaTurno(db.Model):
+    """Turnos de operação de uma rota"""
+    __tablename__ = 'rota_turnos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    rota_id = db.Column(db.Integer, db.ForeignKey('rotas.id'), nullable=False)
+
+    nome = db.Column(db.String(100))
+    horario_inicio = db.Column(db.Time, nullable=False)
+    horario_termino = db.Column(db.Time, nullable=False)
+    tempo_trajeto_minutos = db.Column(db.Integer)
+
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+
+    def tempo_trajeto_formatado(self):
+        """Retorna tempo de trajeto formatado (ex: 1h 30min)"""
+        if not self.tempo_trajeto_minutos:
+            return '-'
+        horas = self.tempo_trajeto_minutos // 60
+        minutos = self.tempo_trajeto_minutos % 60
+        if horas > 0:
+            return f'{horas}h {minutos}min' if minutos else f'{horas}h'
+        return f'{minutos}min'
+
+    def __repr__(self):
+        return f'<RotaTurno {self.rota.tag} - {self.horario_inicio}>'
+
+
+class RotaHistory(db.Model):
+    """Histórico de alterações em rotas"""
+    __tablename__ = 'rota_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    rota_id = db.Column(db.Integer, db.ForeignKey('rotas.id'), nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+    acao = db.Column(db.String(50), nullable=False)
+    # ações: criado, editado, turno_adicionado, turno_alterado, turno_removido,
+    #        km_atualizado, modal_alterado, kml_atualizado, auditoria_realizada
+
+    descricao = db.Column(db.Text)
+    valor_anterior = db.Column(db.String(500))
+    valor_novo = db.Column(db.String(500))
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+
+    # Relacionamento
+    usuario = db.relationship('User', backref='historicos_rota')
+
+    def __repr__(self):
+        return f'<RotaHistory {self.id} - {self.acao}>'
+
+
+class Auditoria(db.Model):
+    """Registro de auditorias realizadas em rotas"""
+    __tablename__ = 'auditorias'
+
+    id = db.Column(db.Integer, primary_key=True)
+    rota_id = db.Column(db.Integer, db.ForeignKey('rotas.id'), nullable=False)
+
+    # Arquivo KML importado (rota executada pelo rastreador)
+    arquivo_kml = db.Column(db.String(500), nullable=False)
+    arquivo_kml_nome = db.Column(db.String(255))
+
+    # Quem realizou a auditoria
+    atendente_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+    # Dados da auditoria
+    data_auditoria = db.Column(db.Date, default=lambda: agora_brasil().date())
+    observacoes = db.Column(db.Text)
+
+    # Métricas da comparação KML
+    km_percorrido = db.Column(db.Float)
+    km_planejado = db.Column(db.Float)
+    desvio_maximo_metros = db.Column(db.Float)
+    aderencia_percentual = db.Column(db.Float)
+    pontos_fora_rota = db.Column(db.Integer)
+
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+
+    # Relacionamentos
+    atendente = db.relationship('User', backref='auditorias_realizadas')
+
+    def __repr__(self):
+        return f'<Auditoria {self.id} - Rota {self.rota.tag}>'

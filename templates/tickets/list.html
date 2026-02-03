@@ -17,10 +17,11 @@
             <div class="col-md-2">
                 <label class="form-label">Status</label>
                 <select name="status" class="form-select">
-                    <option value="">Todos</option>
+                    <option value="ativos" {% if request.args.get('status', 'ativos') == 'ativos' %}selected{% endif %}>Ativos</option>
                     <option value="aberto" {% if request.args.get('status') == 'aberto' %}selected{% endif %}>Aberto</option>
                     <option value="em_andamento" {% if request.args.get('status') == 'em_andamento' %}selected{% endif %}>Em Andamento</option>
                     <option value="fechado" {% if request.args.get('status') == 'fechado' %}selected{% endif %}>Fechado</option>
+                    <option value="todos" {% if request.args.get('status') == 'todos' %}selected{% endif %}>Todos</option>
                 </select>
             </div>
             <div class="col-md-2">

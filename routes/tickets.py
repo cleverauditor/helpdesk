@@ -24,13 +24,15 @@ def lista():
     query = Ticket.query
 
     # Filtros
-    status = request.args.get('status')
+    status = request.args.get('status', 'ativos')  # Padrão: apenas ativos
     prioridade = request.args.get('prioridade')
     atendente_id = request.args.get('atendente_id', type=int)
     categoria_id = request.args.get('categoria_id', type=int)
     busca = request.args.get('busca', '').strip()
 
-    if status:
+    if status == 'ativos':
+        query = query.filter(Ticket.status.in_(['aberto', 'em_andamento']))
+    elif status and status != 'todos':
         query = query.filter(Ticket.status == status)
     if prioridade:
         query = query.filter(Ticket.prioridade == prioridade)

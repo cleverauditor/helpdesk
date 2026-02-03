@@ -91,8 +91,8 @@ def criar():
         db.session.add(user)
         db.session.flush()
 
-        # Adicionar categorias do atendente
-        if tipo in ['admin', 'atendente']:
+        # Adicionar categorias (atendentes e clientes)
+        if tipo != 'admin':
             categorias_ids = request.form.getlist('categorias', type=int)
             for cat_id in categorias_ids:
                 categoria = Category.query.get(cat_id)
@@ -126,8 +126,8 @@ def editar(id):
         if nova_senha and len(nova_senha) >= 6:
             user.set_senha(nova_senha)
 
-        # Atualizar categorias do atendente
-        if user.tipo in ['admin', 'atendente']:
+        # Atualizar categorias (atendentes e clientes)
+        if user.tipo != 'admin':
             categorias_ids = request.form.getlist('categorias', type=int)
             # Limpar categorias atuais
             user.categorias = []
@@ -136,6 +136,9 @@ def editar(id):
                 categoria = Category.query.get(cat_id)
                 if categoria:
                     user.categorias.append(categoria)
+        else:
+            # Admin não tem restrição de categorias
+            user.categorias = []
 
         db.session.commit()
 

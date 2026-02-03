@@ -98,10 +98,10 @@
                     </div>
                     {% endif %}
 
-                    <!-- Categorias para Atendentes -->
+                    <!-- Categorias -->
                     <div class="mb-3" id="campoCategorias" style="display: none;">
-                        <label class="form-label"><i class="bi bi-tags"></i> Categorias de Atendimento</label>
-                        <div class="form-text mb-2">Selecione as categorias que este atendente pode visualizar. Se nenhuma for selecionada, poderá ver todas.</div>
+                        <label class="form-label"><i class="bi bi-tags"></i> <span id="labelCategorias">Categorias</span></label>
+                        <div class="form-text mb-2" id="helpCategorias"></div>
                         <div class="row">
                             {% for categoria in categorias %}
                             <div class="col-md-6">
@@ -168,6 +168,8 @@ function toggleCampos() {
     const tipo = document.getElementById('tipoUsuario').value;
     const campoEmpresa = document.getElementById('campoEmpresa');
     const campoCategorias = document.getElementById('campoCategorias');
+    const labelCategorias = document.getElementById('labelCategorias');
+    const helpCategorias = document.getElementById('helpCategorias');
 
     // Empresa só para cliente externo
     if (tipo === 'cliente_externo') {
@@ -176,9 +178,15 @@ function toggleCampos() {
         campoEmpresa.style.display = 'none';
     }
 
-    // Categorias só para atendente (não admin)
+    // Categorias para atendente e clientes
     if (tipo === 'atendente') {
         campoCategorias.style.display = 'block';
+        labelCategorias.textContent = 'Categorias de Atendimento';
+        helpCategorias.textContent = 'Selecione as categorias que este atendente pode visualizar. Se nenhuma for selecionada, poderá ver todas.';
+    } else if (tipo === 'cliente_externo' || tipo === 'cliente_interno') {
+        campoCategorias.style.display = 'block';
+        labelCategorias.textContent = 'Categorias Permitidas';
+        helpCategorias.textContent = 'Selecione as categorias em que este cliente pode abrir chamados. Se nenhuma for selecionada, poderá abrir em todas.';
     } else {
         campoCategorias.style.display = 'none';
     }

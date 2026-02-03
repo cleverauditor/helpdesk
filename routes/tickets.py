@@ -101,6 +101,12 @@ def lista():
 @tickets_bp.route('/criar', methods=['GET', 'POST'])
 @login_required
 def criar():
+    # Filtrar categorias baseado no usuário
+    if current_user.is_cliente() and current_user.categorias.count() > 0:
+        categorias_permitidas = current_user.categorias.filter_by(ativo=True).all()
+    else:
+        categorias_permitidas = Category.query.filter_by(ativo=True).all()
+
     if request.method == 'POST':
         titulo = request.form.get('titulo', '').strip()
         descricao = request.form.get('descricao', '').strip()
@@ -110,13 +116,17 @@ def criar():
         # Validações
         if not titulo or len(titulo) < 5:
             flash('Título deve ter pelo menos 5 caracteres.', 'danger')
-            return render_template('tickets/create.html',
-                                  categorias=Category.query.filter_by(ativo=True).all())
+            return render_template('tickets/create.html', categorias=categorias_permitidas)
 
         if not descricao or len(descricao) < 10:
             flash('Descrição deve ter pelo menos 10 caracteres.', 'danger')
-            return render_template('tickets/create.html',
-                                  categorias=Category.query.filter_by(ativo=True).all())
+            return render_template('tickets/create.html', categorias=categorias_permitidas)
+
+        # Validar se cliente pode usar esta categoria
+        if categoria_id and current_user.is_cliente() and current_user.categorias.count() > 0:
+            if not current_user.categorias.filter_by(id=categoria_id).first():
+                flash('Categoria não permitida.', 'danger')
+                return render_template('tickets/create.html', categorias=categorias_permitidas)
 
         ticket = Ticket(
             titulo=titulo,
@@ -168,8 +178,7 @@ def criar():
         flash(f'Chamado #{ticket.id} criado com sucesso!', 'success')
         return redirect(url_for('tickets.visualizar', id=ticket.id))
 
-    categorias = Category.query.filter_by(ativo=True).all()
-    return render_template('tickets/create.html', categorias=categorias)
+    return render_template('tickets/create.html', categorias=categorias_permitidas)
 
 
 @tickets_bp.route('/<int:id>')

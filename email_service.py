@@ -46,17 +46,31 @@ def send_email(subject, recipients, html_body, text_body=None):
 
 
 def notify_new_ticket(ticket):
-    """Notifica atendentes sobre novo chamado"""
+    """Notifica atendentes sobre novo chamado (filtrando por categoria)"""
     from models import User
-    atendentes = User.query.filter(
+
+    recipients = []
+
+    # Buscar todos admins e atendentes ativos
+    usuarios = User.query.filter(
         User.tipo.in_(['admin', 'atendente']),
         User.ativo == True
     ).all()
 
-    if not atendentes:
-        return
+    for usuario in usuarios:
+        # Admins sempre recebem
+        if usuario.is_admin():
+            recipients.append(usuario.email)
+        # Atendentes recebem se:
+        # - Não tem categorias atribuídas (vê todos), OU
+        # - A categoria do chamado está entre as suas
+        elif usuario.categorias.count() == 0:
+            recipients.append(usuario.email)
+        elif ticket.categoria_id and usuario.pode_ver_categoria(ticket.categoria_id):
+            recipients.append(usuario.email)
 
-    recipients = [a.email for a in atendentes]
+    if not recipients:
+        return
     subject = f'[Atendimento MaxVia] Novo Chamado #{ticket.id} - {ticket.titulo}'
 
     html_body = f'''

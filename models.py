@@ -1,9 +1,17 @@
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, time, timezone
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 
 db = SQLAlchemy()
+
+# Timezone de Brasília (UTC-3)
+TIMEZONE_BRASIL = timezone(timedelta(hours=-3))
+
+
+def agora_brasil():
+    """Retorna a data/hora atual no timezone de Brasília (UTC-3)"""
+    return datetime.now(TIMEZONE_BRASIL).replace(tzinfo=None)
 
 # Tabela de associação muitos-para-muitos: Atendente <-> Categoria
 atendente_categoria = db.Table('atendente_categoria',
@@ -121,7 +129,7 @@ class User(UserMixin, db.Model):
     departamento = db.Column(db.String(100))
     telefone = db.Column(db.String(20))
     ativo = db.Column(db.Boolean, default=True)
-    criado_em = db.Column(db.DateTime, default=datetime.now)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
 
     # Relacionamentos
     tickets_criados = db.relationship('Ticket', backref='cliente', lazy='dynamic',
@@ -223,8 +231,8 @@ class Ticket(db.Model):
     atendente_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     categoria_id = db.Column(db.Integer, db.ForeignKey('categories.id'))
 
-    criado_em = db.Column(db.DateTime, default=datetime.now)
-    atualizado_em = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
     primeira_resposta_em = db.Column(db.DateTime)
     resolvido_em = db.Column(db.DateTime)
     fechado_em = db.Column(db.DateTime)
@@ -249,7 +257,7 @@ class Ticket(db.Model):
             return 'pendente'
         if self.primeira_resposta_em:
             return 'ok' if self.primeira_resposta_em <= self.sla_resposta_limite else 'violado'
-        if datetime.now() > self.sla_resposta_limite:
+        if agora_brasil() > self.sla_resposta_limite:
             return 'violado'
         return 'pendente'
 
@@ -261,7 +269,7 @@ class Ticket(db.Model):
         data_conclusao = self.fechado_em or self.resolvido_em
         if data_conclusao:
             return 'ok' if data_conclusao <= self.sla_resolucao_limite else 'violado'
-        if datetime.now() > self.sla_resolucao_limite:
+        if agora_brasil() > self.sla_resolucao_limite:
             return 'violado'
         return 'pendente'
 
@@ -271,7 +279,7 @@ class Ticket(db.Model):
             return 0
         if self.resolvido_em:
             return 0
-        return max(0, calcular_horas_uteis_entre(datetime.now(), self.sla_resolucao_limite))
+        return max(0, calcular_horas_uteis_entre(agora_brasil(), self.sla_resolucao_limite))
 
     def tempo_total_atendimento(self):
         """Retorna tempo total de atendimento em minutos"""
@@ -293,7 +301,7 @@ class TicketHistory(db.Model):
     # acao: criado, atribuido, status_alterado, comentario, resolvido, fechado
     descricao = db.Column(db.Text)
     tempo_gasto_minutos = db.Column(db.Integer, default=0)
-    criado_em = db.Column(db.DateTime, default=datetime.now)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
 
     def __repr__(self):
         return f'<TicketHistory {self.id} - {self.acao}>'
@@ -309,7 +317,7 @@ class Attachment(db.Model):
     caminho = db.Column(db.String(500), nullable=False)
     tamanho = db.Column(db.Integer)
     tipo_mime = db.Column(db.String(100))
-    criado_em = db.Column(db.DateTime, default=datetime.now)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
 
     usuario = db.relationship('User', backref='anexos')
 

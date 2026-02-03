@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, Response
 from flask_login import login_required, current_user
 from sqlalchemy import func
-from models import db, Ticket, User, Category, TicketHistory
+from models import db, Ticket, User, Category, TicketHistory, agora_brasil
 
 reports_bp = Blueprint('reports', __name__, url_prefix='/relatorios')
 
@@ -279,5 +279,5 @@ def exportar_csv():
     return Response(
         output.getvalue(),
         mimetype='text/csv',
-        headers={'Content-Disposition': f'attachment;filename=relatorio_chamados_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'}
+        headers={'Content-Disposition': f'attachment;filename=relatorio_chamados_{agora_brasil().strftime("%Y%m%d_%H%M%S")}.csv'}
     )

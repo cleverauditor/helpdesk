@@ -4,7 +4,7 @@ from datetime import datetime
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, send_from_directory
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
-from models import db, Ticket, TicketHistory, Category, User, Attachment
+from models import db, Ticket, TicketHistory, Category, User, Attachment, agora_brasil
 from email_service import notify_new_ticket, notify_ticket_assigned, notify_status_update
 
 tickets_bp = Blueprint('tickets', __name__, url_prefix='/tickets')
@@ -122,7 +122,7 @@ def criar():
             prioridade=prioridade,
             categoria_id=categoria_id if categoria_id else None,
             cliente_id=current_user.id,
-            criado_em=datetime.now()
+            criado_em=agora_brasil()
         )
         ticket.calcular_sla()
 
@@ -215,7 +215,7 @@ def editar(id):
                 ticket.status = new_status
 
                 if new_status == 'fechado' and not ticket.fechado_em:
-                    ticket.fechado_em = datetime.now()
+                    ticket.fechado_em = agora_brasil()
 
                 # Notificar cliente
                 notify_status_update(ticket, old_status)
@@ -264,7 +264,7 @@ def atribuir(id):
 
         # Primeira resposta
         if not ticket.primeira_resposta_em:
-            ticket.primeira_resposta_em = datetime.now()
+            ticket.primeira_resposta_em = agora_brasil()
 
         # Histórico
         historico = TicketHistory(
@@ -356,7 +356,7 @@ def alterar_status(id):
         ticket.status = new_status
 
         if new_status == 'fechado' and not ticket.fechado_em:
-            ticket.fechado_em = datetime.now()
+            ticket.fechado_em = agora_brasil()
 
         historico = TicketHistory(
             ticket_id=ticket.id,

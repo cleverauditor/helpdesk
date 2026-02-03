@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, render_template, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy import func
-from models import db, Ticket, User, Category, TicketHistory
+from models import db, Ticket, User, Category, TicketHistory, agora_brasil
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -37,8 +37,8 @@ def index():
         'fechados': base_query.filter_by(status='fechado').count()
     }
 
-    # SLA Stats
-    now = datetime.utcnow()
+    # SLA Stats - Tickets Ativos (abertos/em andamento)
+    now = agora_brasil()
     tickets_ativos = base_query.filter(Ticket.status.in_(['aberto', 'em_andamento'])).all()
 
     sla_ok = 0
@@ -57,6 +57,24 @@ def index():
     stats['sla_ok'] = sla_ok
     stats['sla_risco'] = sla_risco
     stats['sla_violado'] = sla_violado
+
+    # SLA Histórico - Tickets Fechados
+    tickets_fechados = base_query.filter_by(status='fechado').all()
+
+    sla_hist_ok = 0
+    sla_hist_violado = 0
+
+    for ticket in tickets_fechados:
+        if ticket.sla_resolucao_limite and ticket.fechado_em:
+            if ticket.fechado_em <= ticket.sla_resolucao_limite:
+                sla_hist_ok += 1
+            else:
+                sla_hist_violado += 1
+
+    stats['sla_hist_ok'] = sla_hist_ok
+    stats['sla_hist_violado'] = sla_hist_violado
+    total_hist = sla_hist_ok + sla_hist_violado
+    stats['sla_hist_taxa'] = round(sla_hist_ok / total_hist * 100, 1) if total_hist > 0 else 0
 
     # Últimos chamados
     ultimos_tickets = base_query.order_by(Ticket.criado_em.desc()).limit(10).all()
@@ -202,7 +220,7 @@ def stats_timeline():
 @login_required
 def stats_top_atendentes():
     # Top 5 atendentes por tickets fechados no mês
-    inicio_mes = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    inicio_mes = agora_brasil().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
     resultado = db.session.query(
         User.nome,

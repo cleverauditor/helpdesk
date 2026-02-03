@@ -48,15 +48,15 @@
 
 <!-- SLA e Gráficos -->
 <div class="row mb-4">
-    <!-- Indicadores SLA -->
-    <div class="col-md-4">
+    <!-- SLA Atual (Tickets Abertos/Em Andamento) -->
+    <div class="col-md-3">
         <div class="card h-100">
             <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Status do SLA</h5>
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> SLA Atual</h5>
             </div>
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <span><i class="bi bi-check-circle-fill text-success"></i> Dentro do Prazo</span>
+                    <span><i class="bi bi-check-circle-fill text-success"></i> No Prazo</span>
                     <span class="badge bg-success fs-6">{{ stats.sla_ok }}</span>
                 </div>
                 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -71,8 +71,31 @@
         </div>
     </div>
 
+    <!-- SLA Histórico (Tickets Fechados) -->
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-graph-up"></i> SLA Histórico</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span><i class="bi bi-check-circle-fill text-success"></i> No Prazo</span>
+                    <span class="badge bg-success fs-6">{{ stats.sla_hist_ok }}</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span><i class="bi bi-x-circle-fill text-danger"></i> Fora do Prazo</span>
+                    <span class="badge bg-danger fs-6">{{ stats.sla_hist_violado }}</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-percent"></i> Taxa de Cumprimento</span>
+                    <span class="badge bg-primary fs-6">{{ stats.sla_hist_taxa }}%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Gráfico por Status -->
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card h-100">
             <div class="card-header">
                 <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Por Status</h5>
@@ -84,7 +107,7 @@
     </div>
 
     <!-- Gráfico por Categoria -->
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card h-100">
             <div class="card-header">
                 <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Por Categoria</h5>

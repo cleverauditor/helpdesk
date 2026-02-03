@@ -50,7 +50,15 @@ def limpar_base():
         Ticket.query.delete()
         print("- Chamados removidos")
 
-        # 4. Remover usuários não-admin
+        # 4. Limpar tabela de associação atendente_categoria para usuários não-admin
+        from models import atendente_categoria
+        usuarios_nao_admin = User.query.filter(User.tipo != 'admin').all()
+        for usuario in usuarios_nao_admin:
+            usuario.categorias = []
+        db.session.commit()
+        print("- Associações de categorias removidas")
+
+        # 5. Remover usuários não-admin
         User.query.filter(User.tipo != 'admin').delete()
         print("- Usuários não-admin removidos")
 

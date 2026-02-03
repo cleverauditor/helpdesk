@@ -114,18 +114,16 @@
                         <textarea name="comentario" class="form-control" rows="3"
                                   placeholder="Digite seu comentário..." required></textarea>
                     </div>
-                    <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-send"></i> Enviar Comentário
+                        </button>
                         {% if current_user.is_atendente() %}
                         <div class="d-flex align-items-center gap-2">
                             <label class="form-label mb-0 small text-muted">Tempo (min):</label>
                             <input type="number" name="tempo_gasto" class="form-control form-control-sm" min="0" value="0" style="width: 80px;">
                         </div>
-                        {% else %}
-                        <div></div>
                         {% endif %}
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-send"></i> Enviar Comentário
-                        </button>
                     </div>
                 </form>
             </div>

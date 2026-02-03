@@ -126,9 +126,10 @@
                             <div>
                                 <label class="btn btn-outline-secondary btn-sm mb-0">
                                     <i class="bi bi-paperclip"></i> Anexar
-                                    <input type="file" name="anexos" class="d-none" multiple
+                                    <input type="file" name="anexos" id="anexosComentario" class="d-none" multiple
                                            accept=".png,.jpg,.jpeg,.gif,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip">
                                 </label>
+                                <span id="anexosNomes" class="ms-2 small text-muted"></span>
                             </div>
                         </div>
                         <button type="submit" class="btn btn-primary">
@@ -277,4 +278,16 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('anexosComentario').addEventListener('change', function() {
+    const nomes = Array.from(this.files).map(f => f.name).join(', ');
+    document.getElementById('anexosNomes').textContent = nomes || '';
+    if (this.files.length > 0) {
+        document.getElementById('anexosNomes').innerHTML = '<i class="bi bi-check-circle text-success"></i> ' + this.files.length + ' arquivo(s): ' + nomes;
+    }
+});
+</script>
 {% endblock %}

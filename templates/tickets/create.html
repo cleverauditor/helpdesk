@@ -51,11 +51,12 @@
 
                     <div class="mb-3">
                         <label class="form-label">Anexos</label>
-                        <input type="file" name="anexos" class="form-control" multiple
+                        <input type="file" name="anexos" id="anexosCriar" class="form-control" multiple
                                accept=".png,.jpg,.jpeg,.gif,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip">
                         <div class="form-text">
                             Formatos aceitos: imagens, PDF, documentos Office, TXT, ZIP. Máximo 10MB por arquivo.
                         </div>
+                        <div id="anexosCriarNomes" class="mt-2 small text-success"></div>
                     </div>
 
                     <div class="d-flex gap-2">
@@ -136,4 +137,18 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('anexosCriar').addEventListener('change', function() {
+    const container = document.getElementById('anexosCriarNomes');
+    if (this.files.length > 0) {
+        const nomes = Array.from(this.files).map(f => f.name).join(', ');
+        container.innerHTML = '<i class="bi bi-check-circle"></i> ' + this.files.length + ' arquivo(s) selecionado(s): ' + nomes;
+    } else {
+        container.textContent = '';
+    }
+});
+</script>
 {% endblock %}

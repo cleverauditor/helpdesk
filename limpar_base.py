@@ -4,8 +4,10 @@ Script para limpar base de dados antes de produção.
 Remove todos os chamados e usuários não-admin.
 """
 
-from app import app
+from app import create_app
 from models import db, User, Ticket, TicketHistory, Attachment, Category
+
+app = create_app()
 
 def limpar_base():
     with app.app_context():

@@ -303,24 +303,14 @@ def comentar(id):
     comentario = request.form.get('comentario', '').strip()
     tempo_gasto = request.form.get('tempo_gasto', 0, type=int)
 
-    if not comentario:
-        flash('Comentário não pode estar vazio.', 'danger')
-        return redirect(url_for('tickets.visualizar', id=ticket.id))
-
-    historico = TicketHistory(
-        ticket_id=ticket.id,
-        usuario_id=current_user.id,
-        acao='comentario',
-        descricao=comentario,
-        tempo_gasto_minutos=tempo_gasto if current_user.is_atendente() else 0
-    )
-    db.session.add(historico)
-
-    # Upload de anexos no comentário
+    # Verificar se há anexos
+    tem_anexos = False
+    arquivos_anexados = []
     if 'anexos' in request.files:
         files = request.files.getlist('anexos')
         for file in files:
             if file and file.filename and allowed_file(file.filename):
+                tem_anexos = True
                 filename = secure_filename(file.filename)
                 unique_filename = f"{uuid.uuid4().hex}_{filename}"
                 filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
@@ -335,10 +325,38 @@ def comentar(id):
                     tipo_mime=file.content_type
                 )
                 db.session.add(anexo)
+                arquivos_anexados.append(filename)
+
+    # Verificar se há comentário ou anexo
+    if not comentario and not tem_anexos:
+        flash('Adicione um comentário ou anexe um arquivo.', 'danger')
+        return redirect(url_for('tickets.visualizar', id=ticket.id))
+
+    # Criar histórico
+    if comentario or tem_anexos:
+        descricao = comentario
+        if tem_anexos and not comentario:
+            descricao = f"Anexo(s) adicionado(s): {', '.join(arquivos_anexados)}"
+        elif tem_anexos and comentario:
+            descricao = f"{comentario}\n\n📎 Anexo(s): {', '.join(arquivos_anexados)}"
+
+        historico = TicketHistory(
+            ticket_id=ticket.id,
+            usuario_id=current_user.id,
+            acao='comentario',
+            descricao=descricao,
+            tempo_gasto_minutos=tempo_gasto if current_user.is_atendente() else 0
+        )
+        db.session.add(historico)
 
     db.session.commit()
 
-    flash('Comentário adicionado!', 'success')
+    if tem_anexos and comentario:
+        flash('Comentário e anexo(s) adicionados!', 'success')
+    elif tem_anexos:
+        flash('Anexo(s) adicionado(s)!', 'success')
+    else:
+        flash('Comentário adicionado!', 'success')
     return redirect(url_for('tickets.visualizar', id=ticket.id))
 
 

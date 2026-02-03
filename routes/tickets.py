@@ -122,6 +122,10 @@ def criar():
             flash('Descrição deve ter pelo menos 10 caracteres.', 'danger')
             return render_template('tickets/create.html', categorias=categorias_permitidas)
 
+        if not categoria_id:
+            flash('Selecione uma categoria.', 'danger')
+            return render_template('tickets/create.html', categorias=categorias_permitidas)
+
         # Validar se cliente pode usar esta categoria
         if categoria_id and current_user.is_cliente() and current_user.categorias.count() > 0:
             if not current_user.categorias.filter_by(id=categoria_id).first():
@@ -132,7 +136,7 @@ def criar():
             titulo=titulo,
             descricao=descricao,
             prioridade=prioridade,
-            categoria_id=categoria_id if categoria_id else None,
+            categoria_id=categoria_id,
             cliente_id=current_user.id,
             criado_em=agora_brasil()
         )

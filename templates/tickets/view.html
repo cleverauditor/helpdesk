@@ -109,33 +109,46 @@
                 <h5 class="mb-0"><i class="bi bi-chat-dots"></i> Adicionar Comentário</h5>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ url_for('tickets.comentar', id=ticket.id) }}" enctype="multipart/form-data">
+                <form method="POST" action="{{ url_for('tickets.comentar', id=ticket.id) }}">
                     <div class="mb-3">
                         <textarea name="comentario" class="form-control" rows="3"
-                                  placeholder="Digite seu comentário (opcional se anexar arquivo)..."></textarea>
+                                  placeholder="Digite seu comentário..." required></textarea>
                     </div>
-
                     <div class="d-flex justify-content-between align-items-center">
-                        <div class="d-flex gap-3 align-items-center">
-                            {% if current_user.is_atendente() %}
-                            <div class="d-flex align-items-center gap-2">
-                                <label class="form-label mb-0 small text-muted">Tempo (min):</label>
-                                <input type="number" name="tempo_gasto" class="form-control form-control-sm" min="0" value="0" style="width: 80px;">
-                            </div>
-                            {% endif %}
-                            <div>
-                                <label class="btn btn-outline-secondary btn-sm mb-0">
-                                    <i class="bi bi-paperclip"></i> Anexar
-                                    <input type="file" name="anexos" id="anexosComentario" class="d-none" multiple
-                                           accept=".png,.jpg,.jpeg,.gif,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip">
-                                </label>
-                                <span id="anexosNomes" class="ms-2 small text-muted"></span>
-                            </div>
+                        {% if current_user.is_atendente() %}
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="form-label mb-0 small text-muted">Tempo (min):</label>
+                            <input type="number" name="tempo_gasto" class="form-control form-control-sm" min="0" value="0" style="width: 80px;">
                         </div>
+                        {% else %}
+                        <div></div>
+                        {% endif %}
                         <button type="submit" class="btn btn-primary">
                             <i class="bi bi-send"></i> Enviar Comentário
                         </button>
                     </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Anexar Arquivo -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-paperclip"></i> Anexar Arquivo</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('tickets.anexar', id=ticket.id) }}" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <input type="file" name="anexos" id="anexosArquivo" class="form-control" multiple
+                               accept=".png,.jpg,.jpeg,.gif,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip" required>
+                        <div class="form-text">
+                            Formatos: imagens, PDF, documentos Office, TXT, ZIP. Máximo 10MB.
+                        </div>
+                        <div id="anexosNomes" class="mt-2 small text-success"></div>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="bi bi-upload"></i> Enviar Arquivo
+                    </button>
                 </form>
             </div>
         </div>
@@ -282,11 +295,13 @@
 
 {% block extra_js %}
 <script>
-document.getElementById('anexosComentario').addEventListener('change', function() {
-    const nomes = Array.from(this.files).map(f => f.name).join(', ');
-    document.getElementById('anexosNomes').textContent = nomes || '';
+document.getElementById('anexosArquivo').addEventListener('change', function() {
+    const container = document.getElementById('anexosNomes');
     if (this.files.length > 0) {
-        document.getElementById('anexosNomes').innerHTML = '<i class="bi bi-check-circle text-success"></i> ' + this.files.length + ' arquivo(s): ' + nomes;
+        const nomes = Array.from(this.files).map(f => f.name).join(', ');
+        container.innerHTML = '<i class="bi bi-check-circle"></i> ' + this.files.length + ' arquivo(s) selecionado(s): ' + nomes;
+    } else {
+        container.textContent = '';
     }
 });
 </script>

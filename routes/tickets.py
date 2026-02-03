@@ -303,60 +303,74 @@ def comentar(id):
     comentario = request.form.get('comentario', '').strip()
     tempo_gasto = request.form.get('tempo_gasto', 0, type=int)
 
-    # Verificar se há anexos
-    tem_anexos = False
-    arquivos_anexados = []
-    if 'anexos' in request.files:
-        files = request.files.getlist('anexos')
-        for file in files:
-            if file and file.filename and allowed_file(file.filename):
-                tem_anexos = True
-                filename = secure_filename(file.filename)
-                unique_filename = f"{uuid.uuid4().hex}_{filename}"
-                filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
-                file.save(filepath)
-
-                anexo = Attachment(
-                    ticket_id=ticket.id,
-                    usuario_id=current_user.id,
-                    nome_arquivo=filename,
-                    caminho=unique_filename,
-                    tamanho=os.path.getsize(filepath),
-                    tipo_mime=file.content_type
-                )
-                db.session.add(anexo)
-                arquivos_anexados.append(filename)
-
-    # Verificar se há comentário ou anexo
-    if not comentario and not tem_anexos:
-        flash('Adicione um comentário ou anexe um arquivo.', 'danger')
+    if not comentario:
+        flash('Comentário não pode estar vazio.', 'danger')
         return redirect(url_for('tickets.visualizar', id=ticket.id))
 
-    # Criar histórico
-    if comentario or tem_anexos:
-        descricao = comentario
-        if tem_anexos and not comentario:
-            descricao = f"Anexo(s) adicionado(s): {', '.join(arquivos_anexados)}"
-        elif tem_anexos and comentario:
-            descricao = f"{comentario}\n\n📎 Anexo(s): {', '.join(arquivos_anexados)}"
-
-        historico = TicketHistory(
-            ticket_id=ticket.id,
-            usuario_id=current_user.id,
-            acao='comentario',
-            descricao=descricao,
-            tempo_gasto_minutos=tempo_gasto if current_user.is_atendente() else 0
-        )
-        db.session.add(historico)
-
+    historico = TicketHistory(
+        ticket_id=ticket.id,
+        usuario_id=current_user.id,
+        acao='comentario',
+        descricao=comentario,
+        tempo_gasto_minutos=tempo_gasto if current_user.is_atendente() else 0
+    )
+    db.session.add(historico)
     db.session.commit()
 
-    if tem_anexos and comentario:
-        flash('Comentário e anexo(s) adicionados!', 'success')
-    elif tem_anexos:
-        flash('Anexo(s) adicionado(s)!', 'success')
-    else:
-        flash('Comentário adicionado!', 'success')
+    flash('Comentário adicionado!', 'success')
+    return redirect(url_for('tickets.visualizar', id=ticket.id))
+
+
+@tickets_bp.route('/<int:id>/anexar', methods=['POST'])
+@login_required
+def anexar(id):
+    ticket = Ticket.query.get_or_404(id)
+
+    # Verificar permissão
+    if current_user.is_cliente() and ticket.cliente_id != current_user.id:
+        flash('Você não tem permissão para anexar arquivos neste chamado.', 'danger')
+        return redirect(url_for('tickets.lista'))
+
+    if 'anexos' not in request.files:
+        flash('Nenhum arquivo selecionado.', 'danger')
+        return redirect(url_for('tickets.visualizar', id=ticket.id))
+
+    files = request.files.getlist('anexos')
+    arquivos_anexados = []
+
+    for file in files:
+        if file and file.filename and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            unique_filename = f"{uuid.uuid4().hex}_{filename}"
+            filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
+            file.save(filepath)
+
+            anexo = Attachment(
+                ticket_id=ticket.id,
+                usuario_id=current_user.id,
+                nome_arquivo=filename,
+                caminho=unique_filename,
+                tamanho=os.path.getsize(filepath),
+                tipo_mime=file.content_type
+            )
+            db.session.add(anexo)
+            arquivos_anexados.append(filename)
+
+    if not arquivos_anexados:
+        flash('Nenhum arquivo válido foi enviado.', 'danger')
+        return redirect(url_for('tickets.visualizar', id=ticket.id))
+
+    # Registrar no histórico
+    historico = TicketHistory(
+        ticket_id=ticket.id,
+        usuario_id=current_user.id,
+        acao='anexo',
+        descricao=f"Arquivo(s) anexado(s): {', '.join(arquivos_anexados)}"
+    )
+    db.session.add(historico)
+    db.session.commit()
+
+    flash(f'{len(arquivos_anexados)} arquivo(s) anexado(s) com sucesso!', 'success')
     return redirect(url_for('tickets.visualizar', id=ticket.id))
 
 

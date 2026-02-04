@@ -514,3 +514,86 @@ class Auditoria(db.Model):
 
     def __repr__(self):
         return f'<Auditoria {self.id} - Rota {self.rota.tag}>'
+
+
+# ============================================
+# MÓDULO DE AUDITORIA DE COMBUSTÍVEL
+# ============================================
+
+class CombustivelAnalise(db.Model):
+    """Registro de análises de combustível importadas"""
+    __tablename__ = 'combustivel_analises'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome_arquivo = db.Column(db.String(255), nullable=False)
+    empresa = db.Column(db.String(200))
+    periodo_inicio = db.Column(db.Date)
+    periodo_fim = db.Column(db.Date)
+
+    total_litros = db.Column(db.Float)
+    total_km = db.Column(db.Float)
+    media_kml = db.Column(db.Float)
+    total_registros = db.Column(db.Integer)
+    total_veiculos = db.Column(db.Integer)
+    total_alertas = db.Column(db.Integer)
+
+    usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+
+    # Relacionamentos
+    registros = db.relationship('CombustivelRegistro', backref='analise', lazy='dynamic',
+                                cascade='all, delete-orphan')
+    usuario = db.relationship('User', backref='analises_combustivel')
+
+    def __repr__(self):
+        return f'<CombustivelAnalise {self.id} - {self.nome_arquivo}>'
+
+
+class CombustivelRegistro(db.Model):
+    """Registros individuais de abastecimento"""
+    __tablename__ = 'combustivel_registros'
+
+    id = db.Column(db.Integer, primary_key=True)
+    analise_id = db.Column(db.Integer, db.ForeignKey('combustivel_analises.id'), nullable=False)
+
+    prefixo = db.Column(db.String(20))
+    data = db.Column(db.Date)
+    hora = db.Column(db.String(10))
+    tanque = db.Column(db.Integer)
+    bomba = db.Column(db.Integer)
+    litros = db.Column(db.Float)
+    hodometro_inicio = db.Column(db.Float)
+    hodometro_fim = db.Column(db.Float)
+    km = db.Column(db.Float)
+    km_acumulado = db.Column(db.Float)
+    kml = db.Column(db.Float)
+    modelo = db.Column(db.String(100))
+    garagem = db.Column(db.String(10))
+    flag = db.Column(db.String(5))
+
+    # Campos de análise
+    alerta = db.Column(db.Boolean, default=False)
+    tipo_alerta = db.Column(db.String(100))
+    descricao_alerta = db.Column(db.Text)
+
+    def __repr__(self):
+        return f'<CombustivelRegistro {self.prefixo} {self.data}>'
+
+
+class CombustivelMediaPadrao(db.Model):
+    """Médias padrão de Km/L por modelo de veículo (referência para análise)"""
+    __tablename__ = 'combustivel_medias_padrao'
+
+    id = db.Column(db.Integer, primary_key=True)
+    modelo = db.Column(db.String(100), nullable=False, unique=True)
+    categoria = db.Column(db.String(50))  # onibus, micro, van, sprinter
+    media_kml_referencia = db.Column(db.Float, nullable=False)
+    kml_minimo_aceitavel = db.Column(db.Float)
+    kml_maximo_aceitavel = db.Column(db.Float)
+    observacoes = db.Column(db.Text)
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+
+    def __repr__(self):
+        return f'<CombustivelMediaPadrao {self.modelo} - {self.media_kml_referencia} Km/L>'

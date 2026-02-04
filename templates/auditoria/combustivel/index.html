@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+
+{% block title %}Auditoria de Combustível{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-fuel-pump"></i> Auditoria de Combustível</h2>
+    <div>
+        <a href="{{ url_for('auditoria.combustivel_medias_padrao') }}" class="btn btn-outline-dark me-1">
+            <i class="bi bi-speedometer"></i> Médias Padrão
+        </a>
+        <a href="{{ url_for('auditoria.lista_rotas') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+    </div>
+</div>
+
+<!-- Upload -->
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-upload"></i> Importar Arquivo
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('auditoria.combustivel_upload') }}" enctype="multipart/form-data" class="row g-3">
+            <div class="col-md-8">
+                <label class="form-label">Arquivo TXT (Relatório PRAXIO - ABA Abastecimento)</label>
+                <input type="file" name="arquivo" class="form-control" accept=".txt" required>
+                <div class="form-text">Selecione o arquivo .TXT exportado do sistema PRAXIO (relatório ABA - Abastecimento/Quilometragem)</div>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-gear"></i> Importar e Analisar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Lista de análises -->
+<div class="card">
+    <div class="card-header">
+        <i class="bi bi-clock-history"></i> Análises Realizadas
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Data</th>
+                        <th>Arquivo</th>
+                        <th>Empresa</th>
+                        <th>Período</th>
+                        <th>Registros</th>
+                        <th>Veículos</th>
+                        <th>Km/L Médio</th>
+                        <th>Alertas</th>
+                        <th>Usuário</th>
+                        <th width="120">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in analises.items %}
+                    <tr>
+                        <td>{{ a.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td>
+                            <a href="{{ url_for('auditoria.combustivel_analise', id=a.id) }}">
+                                {{ a.nome_arquivo }}
+                            </a>
+                        </td>
+                        <td>{{ a.empresa or '-' }}</td>
+                        <td>
+                            {% if a.periodo_inicio and a.periodo_fim %}
+                            {{ a.periodo_inicio.strftime('%d/%m/%Y') }} a {{ a.periodo_fim.strftime('%d/%m/%Y') }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>{{ a.total_registros or 0 }}</td>
+                        <td>{{ a.total_veiculos or 0 }}</td>
+                        <td>{{ "%.2f"|format(a.media_kml or 0) }}</td>
+                        <td>
+                            {% if a.total_alertas and a.total_alertas > 0 %}
+                            <span class="badge bg-danger">{{ a.total_alertas }}</span>
+                            {% else %}
+                            <span class="badge bg-success">0</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ a.usuario.nome }}</td>
+                        <td>
+                            <a href="{{ url_for('auditoria.combustivel_analise', id=a.id) }}"
+                               class="btn btn-sm btn-outline-primary" title="Visualizar">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <form method="POST" action="{{ url_for('auditoria.combustivel_excluir', id=a.id) }}"
+                                  style="display:inline" onsubmit="return confirm('Excluir esta análise?')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="10" class="text-center text-muted py-4">
+                            Nenhuma análise realizada. Importe um arquivo TXT para começar.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if analises.pages > 1 %}
+    <div class="card-footer">
+        <nav>
+            <ul class="pagination mb-0 justify-content-center">
+                {% if analises.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('auditoria.combustivel', page=analises.prev_num) }}">
+                        Anterior
+                    </a>
+                </li>
+                {% endif %}
+                <li class="page-item disabled">
+                    <span class="page-link">Página {{ analises.page }} de {{ analises.pages }}</span>
+                </li>
+                {% if analises.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('auditoria.combustivel', page=analises.next_num) }}">
+                        Próxima
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

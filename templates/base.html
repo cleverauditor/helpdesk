@@ -209,8 +209,13 @@
             {% endif %}
             {% if current_user.is_admin() or current_user.categorias.filter_by(nome='Auditoria').first() %}
             <li class="nav-item">
-                <a class="nav-link {% if 'auditoria' in request.endpoint %}active{% endif %}" href="{{ url_for('auditoria.lista_rotas') }}">
-                    <i class="bi bi-signpost-2"></i> Auditoria
+                <a class="nav-link {% if 'auditoria' in request.endpoint and 'combustivel' not in request.endpoint %}active{% endif %}" href="{{ url_for('auditoria.lista_rotas') }}">
+                    <i class="bi bi-signpost-2"></i> Auditoria Rotas
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if 'combustivel' in request.endpoint %}active{% endif %}" href="{{ url_for('auditoria.combustivel') }}">
+                    <i class="bi bi-fuel-pump"></i> Combustível
                 </a>
             </li>
             {% endif %}

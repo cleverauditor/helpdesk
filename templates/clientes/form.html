@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}{{ 'Editar' if cliente else 'Novo' }} Cliente - Auditoria{% endblock %}
+{% block title %}{{ 'Editar' if cliente else 'Novo' }} Cliente - Sistemas MaxVia{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -8,7 +8,7 @@
         <i class="bi bi-building"></i>
         {{ 'Editar Cliente: ' + cliente.nome if cliente else 'Novo Cliente' }}
     </h2>
-    <a href="{{ url_for('auditoria.lista_clientes') }}" class="btn btn-outline-secondary">
+    <a href="{{ url_for('clientes.lista') }}" class="btn btn-outline-secondary">
         <i class="bi bi-arrow-left"></i> Voltar
     </a>
 </div>
@@ -130,7 +130,7 @@
                         <button type="submit" class="btn btn-primary">
                             <i class="bi bi-check-lg"></i> {{ 'Salvar Alterações' if cliente else 'Cadastrar Cliente' }}
                         </button>
-                        <a href="{{ url_for('auditoria.lista_clientes') }}" class="btn btn-outline-secondary">
+                        <a href="{{ url_for('clientes.lista') }}" class="btn btn-outline-secondary">
                             Cancelar
                         </a>
                     </div>
@@ -189,7 +189,7 @@
             </div>
             <div class="card-body small text-muted">
                 <p>Cadastre os dados da empresa cliente.</p>
-                <p class="mb-0">Após o cadastro, você poderá associar rotas a este cliente.</p>
+                <p class="mb-0">Após o cadastro, você poderá associar rotas e vincular usuários a este cliente.</p>
             </div>
         </div>
         {% endif %}

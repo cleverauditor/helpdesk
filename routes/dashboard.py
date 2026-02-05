@@ -4,7 +4,7 @@ from flask_login import login_required, current_user
 from sqlalchemy import func
 from models import db, Ticket, User, Category, TicketHistory, agora_brasil
 
-dashboard_bp = Blueprint('dashboard', __name__)
+dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
 
 
 def get_atendente_categorias_filter():

@@ -5,8 +5,8 @@ from dotenv import load_dotenv
 basedir = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(basedir, '.env'))
 
-from flask import Flask, redirect, url_for
-from flask_login import LoginManager
+from flask import Flask, redirect, url_for, render_template
+from flask_login import LoginManager, login_required, current_user
 from config import Config
 from models import db, User, Category, SLAConfig
 
@@ -37,6 +37,7 @@ def create_app():
     from routes.dashboard import dashboard_bp
     from routes.reports import reports_bp
     from routes.auditoria import auditoria_bp
+    from routes.clientes import clientes_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(tickets_bp)
@@ -44,11 +45,79 @@ def create_app():
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(reports_bp)
     app.register_blueprint(auditoria_bp)
+    app.register_blueprint(clientes_bp)
 
-    # Rota raiz
+    # Rota raiz - Página de módulos
     @app.route('/')
+    @login_required
     def index():
-        return redirect(url_for('dashboard.index'))
+        modulos = []
+
+        # Atendimento - todos os usuários
+        modulos.append({
+            'nome': 'Atendimento',
+            'descricao': 'Central de chamados, tickets e suporte ao cliente.',
+            'icone': 'bi-headset',
+            'cor': '#00a8e8',
+            'url': url_for('dashboard.index')
+        })
+
+        # Relatórios - todos os usuários
+        modulos.append({
+            'nome': 'Relatórios',
+            'descricao': 'Relatórios gerenciais e exportação de dados.',
+            'icone': 'bi-file-earmark-bar-graph',
+            'cor': '#198754',
+            'url': url_for('reports.index')
+        })
+
+        # Auditoria de Rotas - admin + categoria Auditoria
+        tem_auditoria = current_user.is_admin() or \
+            current_user.categorias.filter_by(nome='Auditoria').first()
+
+        # Combustível - admin + categoria Análise de Combustível
+        tem_combustivel = current_user.is_admin() or \
+            current_user.categorias.filter_by(nome='Análise de Combustível').first()
+
+        if tem_auditoria:
+            modulos.append({
+                'nome': 'Auditoria de Rotas',
+                'descricao': 'Auditoria de rotas planejadas vs. executadas com análise KML.',
+                'icone': 'bi-signpost-2',
+                'cor': '#6f42c1',
+                'url': url_for('auditoria.lista_rotas')
+            })
+
+        if tem_combustivel:
+            modulos.append({
+                'nome': 'Combustível',
+                'descricao': 'Análise de consumo de combustível e detecção de anomalias.',
+                'icone': 'bi-fuel-pump',
+                'cor': '#fd7e14',
+                'url': url_for('auditoria.combustivel')
+            })
+
+        # Clientes - admin + auditoria ou combustível
+        if current_user.is_admin() or tem_auditoria or tem_combustivel:
+            modulos.append({
+                'nome': 'Clientes',
+                'descricao': 'Cadastro e gerenciamento de empresas clientes.',
+                'icone': 'bi-building',
+                'cor': '#0d6efd',
+                'url': url_for('clientes.lista')
+            })
+
+        # Administração - admin only
+        if current_user.is_admin():
+            modulos.append({
+                'nome': 'Administração',
+                'descricao': 'Gerenciamento de usuários, categorias e configurações do sistema.',
+                'icone': 'bi-gear',
+                'cor': '#58595b',
+                'url': url_for('users.lista')
+            })
+
+        return render_template('modulos.html', modulos=modulos)
 
     # Context processor para templates
     @app.context_processor
@@ -103,7 +172,8 @@ def init_data():
         ('Informações', 'Solicitações de informações'),
         ('Sugestões', 'Sugestões e melhorias'),
         ('Outros', 'Outros assuntos'),
-        ('Auditoria', 'Acesso ao módulo de auditoria de rotas')
+        ('Auditoria', 'Acesso ao módulo de auditoria de rotas'),
+        ('Análise de Combustível', 'Acesso ao módulo de análise de combustível')
     ]
     for nome, descricao in categorias_padrao:
         if not Category.query.filter_by(nome=nome).first():

@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from functools import wraps
-from models import db, User, Category, SLAConfig
+from models import db, User, Category, SLAConfig, Cliente
 
 users_bp = Blueprint('users', __name__, url_prefix='/usuarios')
 
@@ -11,7 +11,7 @@ def admin_required(f):
     def decorated_function(*args, **kwargs):
         if not current_user.is_admin():
             flash('Acesso restrito a administradores.', 'danger')
-            return redirect(url_for('dashboard.index'))
+            return redirect(url_for('index'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -52,13 +52,14 @@ def lista():
 @admin_required
 def criar():
     categorias = Category.query.filter_by(ativo=True).order_by(Category.nome).all()
+    clientes = Cliente.query.filter_by(ativo=True).order_by(Cliente.nome).all()
 
     if request.method == 'POST':
         nome = request.form.get('nome', '').strip()
         email = request.form.get('email', '').strip().lower()
         senha = request.form.get('senha', '')
         tipo = request.form.get('tipo', 'cliente_externo')
-        empresa = request.form.get('empresa', '').strip()
+        cliente_id = request.form.get('cliente_id', type=int)
         departamento = request.form.get('departamento', '').strip()
         telefone = request.form.get('telefone', '').strip()
 
@@ -76,13 +77,20 @@ def criar():
         if errors:
             for error in errors:
                 flash(error, 'danger')
-            return render_template('users/form.html', user=None, categorias=categorias)
+            return render_template('users/form.html', user=None, categorias=categorias, clientes=clientes)
+
+        # Buscar nome da empresa pelo cliente selecionado
+        empresa = None
+        if tipo == 'cliente_externo' and cliente_id:
+            cliente = Cliente.query.get(cliente_id)
+            if cliente:
+                empresa = cliente.nome
 
         user = User(
             nome=nome,
             email=email,
             tipo=tipo,
-            empresa=empresa if tipo == 'cliente_externo' else None,
+            empresa=empresa,
             departamento=departamento,
             telefone=telefone
         )
@@ -104,7 +112,7 @@ def criar():
         flash(f'Usuário {nome} criado com sucesso!', 'success')
         return redirect(url_for('users.lista'))
 
-    return render_template('users/form.html', user=None, categorias=categorias)
+    return render_template('users/form.html', user=None, categorias=categorias, clientes=clientes)
 
 
 @users_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
@@ -113,14 +121,25 @@ def criar():
 def editar(id):
     user = User.query.get_or_404(id)
     categorias = Category.query.filter_by(ativo=True).order_by(Category.nome).all()
+    clientes = Cliente.query.filter_by(ativo=True).order_by(Cliente.nome).all()
 
     if request.method == 'POST':
         user.nome = request.form.get('nome', '').strip()
         user.tipo = request.form.get('tipo', user.tipo)
-        user.empresa = request.form.get('empresa', '').strip() if user.tipo == 'cliente_externo' else None
         user.departamento = request.form.get('departamento', '').strip()
         user.telefone = request.form.get('telefone', '').strip()
         user.ativo = request.form.get('ativo') == '1'
+
+        # Empresa via select de clientes
+        if user.tipo == 'cliente_externo':
+            cliente_id = request.form.get('cliente_id', type=int)
+            if cliente_id:
+                cliente = Cliente.query.get(cliente_id)
+                user.empresa = cliente.nome if cliente else None
+            else:
+                user.empresa = None
+        else:
+            user.empresa = None
 
         nova_senha = request.form.get('senha', '')
         if nova_senha and len(nova_senha) >= 6:
@@ -145,7 +164,7 @@ def editar(id):
         flash(f'Usuário {user.nome} atualizado!', 'success')
         return redirect(url_for('users.lista'))
 
-    return render_template('users/form.html', user=user, categorias=categorias)
+    return render_template('users/form.html', user=user, categorias=categorias, clientes=clientes)
 
 
 @users_bp.route('/<int:id>/toggle', methods=['POST'])

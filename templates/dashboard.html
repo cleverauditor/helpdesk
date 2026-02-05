@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Atendimento{% endblock %}
+{% block title %}Dashboard - Sistemas MaxVia{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -225,7 +225,7 @@
 {% block extra_js %}
 <script>
 // Gráfico por Status
-fetch('/api/stats/por-status')
+fetch('/dashboard/api/stats/por-status')
     .then(r => r.json())
     .then(data => {
         new Chart(document.getElementById('chartStatus'), {
@@ -249,7 +249,7 @@ fetch('/api/stats/por-status')
     });
 
 // Gráfico por Categoria
-fetch('/api/stats/por-categoria')
+fetch('/dashboard/api/stats/por-categoria')
     .then(r => r.json())
     .then(data => {
         new Chart(document.getElementById('chartCategoria'), {
@@ -279,7 +279,7 @@ fetch('/api/stats/por-categoria')
     });
 
 // Gráfico Timeline
-fetch('/api/stats/timeline')
+fetch('/dashboard/api/stats/timeline')
     .then(r => r.json())
     .then(data => {
         new Chart(document.getElementById('chartTimeline'), {

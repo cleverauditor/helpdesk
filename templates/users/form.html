@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ 'Editar' if user else 'Novo' }} Usuário - Atendimento{% endblock %}
+{% block title %}{{ 'Editar' if user else 'Novo' }} Usuário - Sistemas MaxVia{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -56,10 +56,17 @@
                                 </option>
                             </select>
                         </div>
-                        <div class="col-md-6 mb-3" id="campoEmpresa">
+                        <div class="col-md-6 mb-3" id="campoEmpresa" style="display: none;">
                             <label class="form-label">Empresa</label>
-                            <input type="text" name="empresa" class="form-control" id="inputEmpresa"
-                                   value="{{ user.empresa if user else '' }}">
+                            <select name="cliente_id" class="form-select" id="selectEmpresa">
+                                <option value="">-- Selecione a empresa --</option>
+                                {% for cliente in clientes %}
+                                <option value="{{ cliente.id }}"
+                                        {% if user and user.empresa == cliente.nome %}selected{% endif %}>
+                                    {{ cliente.nome }}{% if cliente.cnpj %} ({{ cliente.cnpj }}){% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
                         </div>
                     </div>
 
@@ -98,19 +105,29 @@
                     </div>
                     {% endif %}
 
-                    <!-- Categorias -->
+                    <!-- Módulos / Categorias -->
                     <div class="mb-3" id="campoCategorias" style="display: none;">
-                        <label class="form-label"><i class="bi bi-tags"></i> <span id="labelCategorias">Categorias</span></label>
+                        <label class="form-label"><i class="bi bi-grid-3x3-gap"></i> <span id="labelCategorias">Módulos e Permissões</span></label>
                         <div class="form-text mb-2" id="helpCategorias"></div>
                         <div class="row">
                             {% for categoria in categorias %}
                             <div class="col-md-6">
-                                <div class="form-check">
+                                <div class="form-check mb-2">
                                     <input type="checkbox" name="categorias" value="{{ categoria.id }}"
                                            class="form-check-input" id="cat_{{ categoria.id }}"
                                            {% if user and categoria in user.categorias.all() %}checked{% endif %}>
                                     <label class="form-check-label" for="cat_{{ categoria.id }}">
+                                        {% if categoria.nome == 'Auditoria' %}
+                                        <i class="bi bi-signpost-2 text-primary"></i>
+                                        {% elif categoria.nome == 'Análise de Combustível' %}
+                                        <i class="bi bi-fuel-pump text-warning"></i>
+                                        {% else %}
+                                        <i class="bi bi-tag text-muted"></i>
+                                        {% endif %}
                                         {{ categoria.nome }}
+                                        {% if categoria.descricao %}
+                                        <small class="text-muted d-block">{{ categoria.descricao }}</small>
+                                        {% endif %}
                                     </label>
                                 </div>
                             </div>
@@ -137,10 +154,21 @@
                 <h5 class="mb-0"><i class="bi bi-info-circle"></i> Tipos de Usuário</h5>
             </div>
             <div class="card-body">
-                <p><strong>Administrador:</strong> Acesso total ao sistema, gestão de usuários e configurações. Vê todos os chamados.</p>
-                <p><strong>Atendente:</strong> Pode atender chamados das categorias atribuídas. Se nenhuma categoria for selecionada, vê todos os chamados.</p>
+                <p><strong>Administrador:</strong> Acesso total ao sistema e todos os módulos.</p>
+                <p><strong>Atendente:</strong> Atende chamados das categorias atribuídas. Acessa módulos conforme permissões.</p>
                 <p><strong>Cliente Interno:</strong> Funcionário da empresa, pode abrir chamados.</p>
-                <p class="mb-0"><strong>Cliente Externo:</strong> Cliente externo, pode abrir chamados.</p>
+                <p class="mb-0"><strong>Cliente Externo:</strong> Cliente vinculado a uma empresa cadastrada.</p>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-grid-3x3-gap"></i> Sobre os Módulos</h5>
+            </div>
+            <div class="card-body">
+                <p class="small"><strong>Auditoria:</strong> Dá acesso ao módulo de Auditoria de Rotas.</p>
+                <p class="small"><strong>Análise de Combustível:</strong> Dá acesso ao módulo de Análise de Combustível.</p>
+                <p class="small mb-0"><strong>Categorias de atendimento:</strong> Definem quais chamados o usuário pode ver ou abrir. Sem seleção = acesso a todas.</p>
             </div>
         </div>
 
@@ -178,11 +206,11 @@ function toggleCampos() {
         campoEmpresa.style.display = 'none';
     }
 
-    // Categorias para atendente e clientes
+    // Categorias/Módulos para atendente e clientes
     if (tipo === 'atendente') {
         campoCategorias.style.display = 'block';
-        labelCategorias.textContent = 'Categorias de Atendimento';
-        helpCategorias.textContent = 'Selecione as categorias que este atendente pode visualizar. Se nenhuma for selecionada, poderá ver todas.';
+        labelCategorias.textContent = 'Módulos e Permissões';
+        helpCategorias.textContent = 'Selecione as categorias de atendimento e módulos que este usuário pode acessar. Marque "Auditoria" para liberar Auditoria de Rotas e Combustível.';
     } else if (tipo === 'cliente_externo' || tipo === 'cliente_interno') {
         campoCategorias.style.display = 'block';
         labelCategorias.textContent = 'Categorias Permitidas';

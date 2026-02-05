@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+
+{% block title %}Sistemas MaxVia{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h2><i class="bi bi-grid-3x3-gap"></i> Sistemas</h2>
+    <p class="text-muted">Selecione um módulo para acessar.</p>
+</div>
+
+<div class="row g-4">
+    {% for modulo in modulos %}
+    <div class="col-md-4">
+        <a href="{{ modulo.url }}" class="text-decoration-none">
+            <div class="card h-100 border-0 shadow-sm modulo-card" style="border-left: 4px solid {{ modulo.cor }} !important;">
+                <div class="card-body d-flex align-items-start">
+                    <div class="me-3">
+                        <i class="bi {{ modulo.icone }}" style="font-size: 2.5rem; color: {{ modulo.cor }};"></i>
+                    </div>
+                    <div>
+                        <h5 class="card-title mb-1" style="color: var(--maxvia-dark);">{{ modulo.nome }}</h5>
+                        <p class="card-text text-muted small mb-0">{{ modulo.descricao }}</p>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .modulo-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+        cursor: pointer;
+    }
+    .modulo-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 .5rem 1rem rgba(0,0,0,.15) !important;
+    }
+</style>
+{% endblock %}

@@ -1,15 +1,15 @@
 {% extends 'base.html' %}
 
-{% block title %}Clientes - Auditoria{% endblock %}
+{% block title %}Clientes - Sistemas MaxVia{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="bi bi-building"></i> Clientes</h2>
     <div>
-        <a href="{{ url_for('auditoria.lista_rotas') }}" class="btn btn-outline-secondary me-2">
-            <i class="bi bi-arrow-left"></i> Voltar para Rotas
+        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-arrow-left"></i> Voltar
         </a>
-        <a href="{{ url_for('auditoria.criar_cliente') }}" class="btn btn-primary">
+        <a href="{{ url_for('clientes.criar') }}" class="btn btn-primary">
             <i class="bi bi-plus-lg"></i> Novo Cliente
         </a>
     </div>
@@ -37,7 +37,7 @@
                 <button type="submit" class="btn btn-primary me-2">
                     <i class="bi bi-search"></i> Filtrar
                 </button>
-                <a href="{{ url_for('auditoria.lista_clientes') }}" class="btn btn-outline-secondary">
+                <a href="{{ url_for('clientes.lista') }}" class="btn btn-outline-secondary">
                     <i class="bi bi-x-lg"></i>
                 </a>
             </div>
@@ -97,11 +97,11 @@
                             {% endif %}
                         </td>
                         <td>
-                            <a href="{{ url_for('auditoria.editar_cliente', id=cliente.id) }}"
+                            <a href="{{ url_for('clientes.editar', id=cliente.id) }}"
                                class="btn btn-sm btn-outline-secondary" title="Editar">
                                 <i class="bi bi-pencil"></i>
                             </a>
-                            <form method="POST" action="{{ url_for('auditoria.toggle_cliente', id=cliente.id) }}"
+                            <form method="POST" action="{{ url_for('clientes.toggle', id=cliente.id) }}"
                                   style="display:inline">
                                 <button type="submit"
                                         class="btn btn-sm btn-outline-{{ 'danger' if cliente.ativo else 'success' }}"
@@ -129,7 +129,7 @@
             <ul class="pagination mb-0 justify-content-center">
                 {% if clientes.has_prev %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('auditoria.lista_clientes', page=clientes.prev_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('clientes.lista', page=clientes.prev_num, **request.args) }}">
                         Anterior
                     </a>
                 </li>
@@ -141,7 +141,7 @@
 
                 {% if clientes.has_next %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('auditoria.lista_clientes', page=clientes.next_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('clientes.lista', page=clientes.next_num, **request.args) }}">
                         Próxima
                     </a>
                 </li>

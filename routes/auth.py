@@ -8,7 +8,7 @@ auth_bp = Blueprint('auth', __name__)
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('dashboard.index'))
+        return redirect(url_for('index'))
 
     if request.method == 'POST':
         email = request.form.get('email', '').strip().lower()
@@ -24,7 +24,7 @@ def login():
             login_user(user, remember=request.form.get('lembrar'))
             next_page = request.args.get('next')
             flash(f'Bem-vindo, {user.nome}!', 'success')
-            return redirect(next_page or url_for('dashboard.index'))
+            return redirect(next_page or url_for('index'))
         else:
             flash('Email ou senha inválidos.', 'danger')
 
@@ -42,7 +42,7 @@ def logout():
 @auth_bp.route('/registro', methods=['GET', 'POST'])
 def registro():
     if current_user.is_authenticated:
-        return redirect(url_for('dashboard.index'))
+        return redirect(url_for('index'))
 
     if request.method == 'POST':
         nome = request.form.get('nome', '').strip()

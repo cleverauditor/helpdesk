@@ -19,14 +19,30 @@ def auditoria_required(f):
     def decorated_function(*args, **kwargs):
         if current_user.is_admin():
             return f(*args, **kwargs)
-        # Verificar se tem a categoria "Auditoria"
         categoria_auditoria = Category.query.filter_by(nome='Auditoria').first()
         if not categoria_auditoria:
             flash('Módulo de auditoria não configurado.', 'danger')
-            return redirect(url_for('dashboard.index'))
+            return redirect(url_for('index'))
         if categoria_auditoria not in current_user.categorias.all():
             flash('Acesso restrito ao módulo de auditoria.', 'danger')
-            return redirect(url_for('dashboard.index'))
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def combustivel_required(f):
+    """Decorator que verifica se o usuário tem acesso ao módulo de combustível"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if current_user.is_admin():
+            return f(*args, **kwargs)
+        categoria = Category.query.filter_by(nome='Análise de Combustível').first()
+        if not categoria:
+            flash('Módulo de combustível não configurado.', 'danger')
+            return redirect(url_for('index'))
+        if categoria not in current_user.categorias.all():
+            flash('Acesso restrito ao módulo de combustível.', 'danger')
+            return redirect(url_for('index'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -49,11 +65,6 @@ def registrar_historico_rota(rota_id, usuario_id, acao, descricao, valor_anterio
     )
     db.session.add(historico)
     return historico
-
-
-def get_clientes():
-    """Retorna lista de clientes para seleção"""
-    return Cliente.query.filter_by(ativo=True).order_by(Cliente.nome).all()
 
 
 # ============================================
@@ -165,136 +176,6 @@ def toggle_turno_padrao(id):
 
 
 # ============================================
-# ROTAS DE CLIENTES (CRUD)
-# ============================================
-
-@auditoria_bp.route('/clientes')
-@login_required
-@auditoria_required
-def lista_clientes():
-    page = request.args.get('page', 1, type=int)
-    per_page = 20
-
-    query = Cliente.query
-
-    # Filtros
-    busca = request.args.get('busca', '').strip()
-    ativo = request.args.get('ativo')
-
-    if busca:
-        query = query.filter(
-            db.or_(
-                Cliente.nome.ilike(f'%{busca}%'),
-                Cliente.cnpj.ilike(f'%{busca}%'),
-                Cliente.cidade.ilike(f'%{busca}%')
-            )
-        )
-    if ativo is not None and ativo != '':
-        query = query.filter(Cliente.ativo == (ativo == '1'))
-
-    clientes = query.order_by(Cliente.nome).paginate(page=page, per_page=per_page, error_out=False)
-
-    return render_template('auditoria/clientes/list.html', clientes=clientes)
-
-
-@auditoria_bp.route('/clientes/criar', methods=['GET', 'POST'])
-@login_required
-@auditoria_required
-def criar_cliente():
-    if request.method == 'POST':
-        nome = request.form.get('nome', '').strip()
-        razao_social = request.form.get('razao_social', '').strip()
-        cnpj = request.form.get('cnpj', '').strip()
-        endereco = request.form.get('endereco', '').strip()
-        cidade = request.form.get('cidade', '').strip()
-        estado = request.form.get('estado', '').strip().upper()
-        telefone = request.form.get('telefone', '').strip()
-        email = request.form.get('email', '').strip()
-        contato = request.form.get('contato', '').strip()
-        observacoes = request.form.get('observacoes', '').strip()
-
-        # Validações
-        if not nome:
-            flash('Nome é obrigatório.', 'danger')
-            return render_template('auditoria/clientes/form.html', cliente=None)
-
-        if cnpj and Cliente.query.filter_by(cnpj=cnpj).first():
-            flash('CNPJ já cadastrado.', 'danger')
-            return render_template('auditoria/clientes/form.html', cliente=None)
-
-        cliente = Cliente(
-            nome=nome,
-            razao_social=razao_social,
-            cnpj=cnpj or None,
-            endereco=endereco,
-            cidade=cidade,
-            estado=estado,
-            telefone=telefone,
-            email=email,
-            contato=contato,
-            observacoes=observacoes
-        )
-        db.session.add(cliente)
-        db.session.commit()
-
-        flash(f'Cliente {nome} criado com sucesso!', 'success')
-        return redirect(url_for('auditoria.lista_clientes'))
-
-    return render_template('auditoria/clientes/form.html', cliente=None)
-
-
-@auditoria_bp.route('/clientes/<int:id>/editar', methods=['GET', 'POST'])
-@login_required
-@auditoria_required
-def editar_cliente(id):
-    cliente = Cliente.query.get_or_404(id)
-
-    if request.method == 'POST':
-        cliente.nome = request.form.get('nome', '').strip()
-        cliente.razao_social = request.form.get('razao_social', '').strip()
-        novo_cnpj = request.form.get('cnpj', '').strip()
-        cliente.endereco = request.form.get('endereco', '').strip()
-        cliente.cidade = request.form.get('cidade', '').strip()
-        cliente.estado = request.form.get('estado', '').strip().upper()
-        cliente.telefone = request.form.get('telefone', '').strip()
-        cliente.email = request.form.get('email', '').strip()
-        cliente.contato = request.form.get('contato', '').strip()
-        cliente.observacoes = request.form.get('observacoes', '').strip()
-        cliente.ativo = request.form.get('ativo') == '1'
-
-        # Validar CNPJ único
-        if novo_cnpj and novo_cnpj != cliente.cnpj:
-            if Cliente.query.filter(Cliente.cnpj == novo_cnpj, Cliente.id != cliente.id).first():
-                flash('CNPJ já cadastrado para outro cliente.', 'danger')
-                return render_template('auditoria/clientes/form.html', cliente=cliente)
-        cliente.cnpj = novo_cnpj or None
-
-        if not cliente.nome:
-            flash('Nome é obrigatório.', 'danger')
-            return render_template('auditoria/clientes/form.html', cliente=cliente)
-
-        db.session.commit()
-        flash(f'Cliente {cliente.nome} atualizado!', 'success')
-        return redirect(url_for('auditoria.lista_clientes'))
-
-    return render_template('auditoria/clientes/form.html', cliente=cliente)
-
-
-@auditoria_bp.route('/clientes/<int:id>/toggle', methods=['POST'])
-@login_required
-@auditoria_required
-def toggle_cliente(id):
-    cliente = Cliente.query.get_or_404(id)
-    cliente.ativo = not cliente.ativo
-    db.session.commit()
-
-    status = 'ativado' if cliente.ativo else 'desativado'
-    flash(f'Cliente {cliente.nome} {status}.', 'success')
-
-    return redirect(url_for('auditoria.lista_clientes'))
-
-
-# ============================================
 # ROTAS DE ROTAS (CRUD)
 # ============================================
 
@@ -324,7 +205,7 @@ def lista_rotas():
 
     rotas = query.order_by(Rota.tag).paginate(page=page, per_page=per_page, error_out=False)
 
-    clientes = get_clientes()
+    clientes = Cliente.query.filter_by(ativo=True).order_by(Cliente.nome).all()
     modais = Modal.query.filter_by(ativo=True).order_by(Modal.nome).all()
 
     return render_template('auditoria/rotas/list.html',
@@ -337,7 +218,7 @@ def lista_rotas():
 @login_required
 @auditoria_required
 def criar_rota():
-    clientes = get_clientes()
+    clientes = Cliente.query.filter_by(ativo=True).order_by(Cliente.nome).all()
     modais = Modal.query.filter_by(ativo=True).order_by(Modal.nome).all()
     turnos_padrao = TurnoPadrao.query.filter_by(ativo=True).order_by(TurnoPadrao.horario_inicio).all()
 
@@ -478,7 +359,7 @@ def visualizar_rota(id):
 @auditoria_required
 def editar_rota(id):
     rota = Rota.query.get_or_404(id)
-    clientes = get_clientes()
+    clientes = Cliente.query.filter_by(ativo=True).order_by(Cliente.nome).all()
     modais = Modal.query.filter_by(ativo=True).order_by(Modal.nome).all()
     turnos_padrao = TurnoPadrao.query.filter_by(ativo=True).order_by(TurnoPadrao.horario_inicio).all()
 
@@ -900,7 +781,7 @@ def lista_auditorias():
     )
 
     rotas = Rota.query.filter_by(ativo=True).order_by(Rota.tag).all()
-    clientes = get_clientes()
+    clientes = Cliente.query.filter_by(ativo=True).order_by(Cliente.nome).all()
 
     return render_template('auditoria/auditar/lista.html',
                            auditorias=auditorias,
@@ -916,7 +797,7 @@ def lista_auditorias():
 @login_required
 @auditoria_required
 def relatorios():
-    clientes = get_clientes()
+    clientes = Cliente.query.filter_by(ativo=True).order_by(Cliente.nome).all()
     rotas = Rota.query.filter_by(ativo=True).order_by(Rota.tag).all()
 
     # Filtros
@@ -1052,7 +933,7 @@ def download_kml(tipo, id):
 
 @auditoria_bp.route('/combustivel')
 @login_required
-@auditoria_required
+@combustivel_required
 def combustivel():
     page = request.args.get('page', 1, type=int)
     per_page = 20
@@ -1066,7 +947,7 @@ def combustivel():
 
 @auditoria_bp.route('/combustivel/upload', methods=['POST'])
 @login_required
-@auditoria_required
+@combustivel_required
 def combustivel_upload():
     if 'arquivo' not in request.files or not request.files['arquivo'].filename:
         flash('Selecione um arquivo TXT para importar.', 'danger')
@@ -1175,7 +1056,7 @@ def combustivel_upload():
 
 @auditoria_bp.route('/combustivel/<int:id>')
 @login_required
-@auditoria_required
+@combustivel_required
 def combustivel_analise(id):
     analise = CombustivelAnalise.query.get_or_404(id)
 
@@ -1269,7 +1150,7 @@ def combustivel_analise(id):
 
 @auditoria_bp.route('/combustivel/<int:id>/excluir', methods=['POST'])
 @login_required
-@auditoria_required
+@combustivel_required
 def combustivel_excluir(id):
     analise = CombustivelAnalise.query.get_or_404(id)
     nome = analise.nome_arquivo
@@ -1283,7 +1164,7 @@ def combustivel_excluir(id):
 
 @auditoria_bp.route('/combustivel/<int:id>/exportar', methods=['POST'])
 @login_required
-@auditoria_required
+@combustivel_required
 def combustivel_exportar(id):
     import csv
     from io import StringIO
@@ -1347,7 +1228,7 @@ def combustivel_exportar(id):
 
 @auditoria_bp.route('/combustivel/medias-padrao')
 @login_required
-@auditoria_required
+@combustivel_required
 def combustivel_medias_padrao():
     medias = CombustivelMediaPadrao.query.order_by(CombustivelMediaPadrao.modelo).all()
 
@@ -1368,7 +1249,7 @@ def combustivel_medias_padrao():
 
 @auditoria_bp.route('/combustivel/medias-padrao/salvar', methods=['POST'])
 @login_required
-@auditoria_required
+@combustivel_required
 def combustivel_salvar_media_padrao():
     modelo = request.form.get('modelo', '').strip()
     categoria = request.form.get('categoria', '').strip()
@@ -1408,7 +1289,7 @@ def combustivel_salvar_media_padrao():
 
 @auditoria_bp.route('/combustivel/medias-padrao/<int:id>/editar', methods=['POST'])
 @login_required
-@auditoria_required
+@combustivel_required
 def combustivel_editar_media_padrao(id):
     mp = CombustivelMediaPadrao.query.get_or_404(id)
 
@@ -1430,7 +1311,7 @@ def combustivel_editar_media_padrao(id):
 
 @auditoria_bp.route('/combustivel/medias-padrao/<int:id>/toggle', methods=['POST'])
 @login_required
-@auditoria_required
+@combustivel_required
 def combustivel_toggle_media_padrao(id):
     mp = CombustivelMediaPadrao.query.get_or_404(id)
     mp.ativo = not mp.ativo
@@ -1443,7 +1324,7 @@ def combustivel_toggle_media_padrao(id):
 
 @auditoria_bp.route('/combustivel/reanalisar/<int:id>', methods=['POST'])
 @login_required
-@auditoria_required
+@combustivel_required
 def combustivel_reanalisar(id):
     """Reanalisa uma importação existente usando as médias padrão atuais"""
     analise = CombustivelAnalise.query.get_or_404(id)

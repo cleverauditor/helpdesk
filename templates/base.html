@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Atendimento{% endblock %}</title>
+    <title>{% block title %}Sistemas MaxVia{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <style>
@@ -172,9 +172,14 @@
             <div class="logo-container">
                 <img src="{{ url_for('static', filename='img/logo.png') }}" alt="MaxVia">
             </div>
-            <small>ATENDIMENTO</small>
+            <small>SISTEMAS</small>
         </div>
         <ul class="nav flex-column mt-3">
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" href="{{ url_for('index') }}">
+                    <i class="bi bi-house"></i> Início
+                </a>
+            </li>
             <li class="nav-item">
                 <a class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}" href="{{ url_for('dashboard.index') }}">
                     <i class="bi bi-speedometer2"></i> Dashboard
@@ -207,12 +212,21 @@
                 </a>
             </li>
             {% endif %}
+            {% if current_user.is_admin() or current_user.categorias.filter_by(nome='Auditoria').first() or current_user.categorias.filter_by(nome='Análise de Combustível').first() %}
+            <li class="nav-item">
+                <a class="nav-link {% if 'clientes' in request.endpoint %}active{% endif %}" href="{{ url_for('clientes.lista') }}">
+                    <i class="bi bi-building"></i> Clientes
+                </a>
+            </li>
+            {% endif %}
             {% if current_user.is_admin() or current_user.categorias.filter_by(nome='Auditoria').first() %}
             <li class="nav-item">
                 <a class="nav-link {% if 'auditoria' in request.endpoint and 'combustivel' not in request.endpoint %}active{% endif %}" href="{{ url_for('auditoria.lista_rotas') }}">
                     <i class="bi bi-signpost-2"></i> Auditoria Rotas
                 </a>
             </li>
+            {% endif %}
+            {% if current_user.is_admin() or current_user.categorias.filter_by(nome='Análise de Combustível').first() %}
             <li class="nav-item">
                 <a class="nav-link {% if 'combustivel' in request.endpoint %}active{% endif %}" href="{{ url_for('auditoria.combustivel') }}">
                     <i class="bi bi-fuel-pump"></i> Combustível

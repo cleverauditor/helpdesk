@@ -188,6 +188,12 @@ def comparar_kml(kml_planejado_path, kml_executado_path, tolerancia_metros=100):
     """
     Compara dois arquivos KML (planejado vs executado) e retorna métricas.
 
+    A aderência é calculada de forma bidirecional:
+    - Direção 1: % dos pontos executados que seguiram a rota planejada
+    - Direção 2: % dos pontos planejados que foram cobertos pela rota executada
+    O resultado final é o menor entre as duas direções, garantindo que
+    tanto seguir a rota quanto cobri-la completamente sejam avaliados.
+
     Args:
         kml_planejado_path: Caminho do arquivo KML da rota planejada
         kml_executado_path: Caminho do arquivo KML da rota executada
@@ -198,8 +204,8 @@ def comparar_kml(kml_planejado_path, kml_executado_path, tolerancia_metros=100):
         - km_planejado: Distância total da rota planejada em km
         - km_percorrido: Distância total percorrida em km
         - desvio_maximo_metros: Maior distância de um ponto executado para a rota planejada
-        - aderencia_percentual: Percentual de pontos dentro da tolerância
-        - pontos_fora_rota: Quantidade de pontos fora da tolerância
+        - aderencia_percentual: Percentual de aderência bidirecional
+        - pontos_fora_rota: Quantidade de pontos executados fora da tolerância
     """
     resultado = {
         'km_planejado': None,
@@ -218,28 +224,22 @@ def comparar_kml(kml_planejado_path, kml_executado_path, tolerancia_metros=100):
     # Calcular km percorrido
     resultado['km_percorrido'] = round(calcular_distancia_total(coords_executado), 2)
 
-    # Se não tem arquivo planejado, retorna apenas o km percorrido
+    # Se não tem arquivo planejado, aderência fica None (sem comparação possível)
     if not kml_planejado_path or not os.path.exists(kml_planejado_path):
-        # Sem arquivo planejado, considerar 100% de aderência
-        resultado['aderencia_percentual'] = 100.0
-        resultado['desvio_maximo_metros'] = 0
-        resultado['pontos_fora_rota'] = 0
+        print(f"Arquivo planejado não encontrado: {kml_planejado_path}")
         return resultado
 
     # Extrair coordenadas do arquivo planejado
     coords_planejado = extrair_coordenadas_kml(kml_planejado_path)
     if not coords_planejado:
         print(f"Nenhuma coordenada encontrada no arquivo planejado: {kml_planejado_path}")
-        # Sem coordenadas planejadas, considerar 100% de aderência
-        resultado['aderencia_percentual'] = 100.0
-        resultado['desvio_maximo_metros'] = 0
-        resultado['pontos_fora_rota'] = 0
         return resultado
 
     # Calcular km planejado
     resultado['km_planejado'] = round(calcular_distancia_total(coords_planejado), 2)
 
-    # Calcular desvios
+    # --- Direção 1: Executado seguiu o planejado? ---
+    # Para cada ponto executado, verificar se está próximo da rota planejada
     pontos_fora = 0
     desvio_maximo = 0
 
@@ -252,16 +252,31 @@ def comparar_kml(kml_planejado_path, kml_executado_path, tolerancia_metros=100):
         if dist > desvio_maximo:
             desvio_maximo = dist
 
-    # Calcular métricas
     resultado['desvio_maximo_metros'] = round(desvio_maximo, 2)
     resultado['pontos_fora_rota'] = pontos_fora
 
-    # Aderência: percentual de pontos dentro da tolerância
-    pontos_dentro = len(coords_executado) - pontos_fora
     if len(coords_executado) > 0:
-        resultado['aderencia_percentual'] = round((pontos_dentro / len(coords_executado)) * 100, 2)
+        aderencia_direcao1 = (len(coords_executado) - pontos_fora) / len(coords_executado)
     else:
-        resultado['aderencia_percentual'] = 0
+        aderencia_direcao1 = 0
+
+    # --- Direção 2: Rota planejada foi coberta pelo executado? ---
+    # Para cada ponto planejado, verificar se algum ponto executado passou perto
+    pontos_planejados_cobertos = 0
+
+    for ponto in coords_planejado:
+        dist = distancia_ponto_para_linha(ponto, coords_executado)
+        if dist <= tolerancia_metros:
+            pontos_planejados_cobertos += 1
+
+    if len(coords_planejado) > 0:
+        aderencia_direcao2 = pontos_planejados_cobertos / len(coords_planejado)
+    else:
+        aderencia_direcao2 = 0
+
+    # Aderência final: menor entre as duas direções
+    # Isso garante que tanto seguir a rota quanto cobri-la sejam avaliados
+    resultado['aderencia_percentual'] = round(min(aderencia_direcao1, aderencia_direcao2) * 100, 2)
 
     return resultado
 

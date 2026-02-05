@@ -174,12 +174,29 @@
             </div>
             <small>SISTEMAS</small>
         </div>
+        {# Verificar se o usuário tem acesso ao módulo de atendimento #}
+        {% set ns = namespace(tem_atendimento=false) %}
+        {% if current_user.is_admin() or current_user.tipo in ['cliente_interno', 'cliente_externo'] %}
+            {% set ns.tem_atendimento = true %}
+        {% elif current_user.tipo == 'atendente' %}
+            {% set cats_usuario = current_user.categorias.all() %}
+            {% if cats_usuario | length == 0 %}
+                {% set ns.tem_atendimento = true %}
+            {% else %}
+                {% for cat in cats_usuario %}
+                    {% if cat.nome not in ['Auditoria', 'Análise de Combustível'] %}
+                        {% set ns.tem_atendimento = true %}
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+        {% endif %}
         <ul class="nav flex-column mt-3">
             <li class="nav-item">
                 <a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" href="{{ url_for('index') }}">
                     <i class="bi bi-house"></i> Início
                 </a>
             </li>
+            {% if ns.tem_atendimento %}
             <li class="nav-item">
                 <a class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}" href="{{ url_for('dashboard.index') }}">
                     <i class="bi bi-speedometer2"></i> Dashboard
@@ -195,6 +212,7 @@
                     <i class="bi bi-file-earmark-bar-graph"></i> {% if current_user.is_cliente() %}Meus Relatórios{% else %}Relatórios{% endif %}
                 </a>
             </li>
+            {% endif %}
             {% if current_user.is_admin() %}
             <li class="nav-item">
                 <a class="nav-link {% if request.endpoint == 'users.lista' %}active{% endif %}" href="{{ url_for('users.lista') }}">

@@ -17,19 +17,21 @@
 
         <div class="card">
             <div class="card-body">
-                <form method="POST">
+                <form method="POST" autocomplete="off">
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Nome *</label>
                             <input type="text" name="nome" class="form-control"
-                                   value="{{ user.nome if user else '' }}" required minlength="3">
+                                   value="{{ user.nome if user else '' }}" required minlength="3"
+                                   autocomplete="off">
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Email {% if not user %}*{% endif %}</label>
                             {% if user %}
                             <input type="email" class="form-control" value="{{ user.email }}" disabled>
                             {% else %}
-                            <input type="email" name="email" class="form-control" required>
+                            <input type="email" name="email" class="form-control" required
+                                   autocomplete="new-email">
                             {% endif %}
                         </div>
                     </div>
@@ -88,7 +90,8 @@
                             <label class="form-label">Senha {% if not user %}*{% endif %}</label>
                             <input type="password" name="senha" class="form-control"
                                    {% if not user %}required{% endif %} minlength="6"
-                                   placeholder="{{ 'Deixe em branco para manter' if user else '' }}">
+                                   placeholder="{{ 'Deixe em branco para manter' if user else '' }}"
+                                   autocomplete="new-password">
                             {% if user %}
                             <div class="form-text">Deixe em branco para manter a senha atual</div>
                             {% endif %}

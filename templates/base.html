@@ -184,7 +184,7 @@
                 {% set ns.tem_atendimento = true %}
             {% else %}
                 {% for cat in cats_usuario %}
-                    {% if cat.nome not in ['Auditoria', 'Análise de Combustível'] %}
+                    {% if cat.nome not in ['Auditoria', 'Análise de Combustível', 'Indicadores Diretoria'] %}
                         {% set ns.tem_atendimento = true %}
                     {% endif %}
                 {% endfor %}
@@ -248,6 +248,13 @@
             <li class="nav-item">
                 <a class="nav-link {% if 'combustivel' in request.endpoint %}active{% endif %}" href="{{ url_for('auditoria.combustivel') }}">
                     <i class="bi bi-fuel-pump"></i> Combustível
+                </a>
+            </li>
+            {% endif %}
+            {% if current_user.is_admin() or current_user.categorias.filter_by(nome='Indicadores Diretoria').first() %}
+            <li class="nav-item">
+                <a class="nav-link {% if 'indicadores' in request.endpoint %}active{% endif %}" href="{{ url_for('indicadores.painel') }}">
+                    <i class="bi bi-graph-up-arrow"></i> Indicadores
                 </a>
             </li>
             {% endif %}

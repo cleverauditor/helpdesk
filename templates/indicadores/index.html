@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+
+{% block title %}Indicadores Diretoria - Sistemas MaxVia{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-graph-up-arrow"></i> Indicadores Diretoria</h2>
+    <div>
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('indicadores.gerenciar') }}" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-gear"></i> Gerenciar
+        </a>
+        {% endif %}
+        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+    </div>
+</div>
+
+<!-- Seletor de Mês e Estatísticas -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <form method="GET" class="d-flex align-items-end gap-2">
+                    <div class="flex-grow-1">
+                        <label class="form-label small">Mês de Referência</label>
+                        <input type="month" name="periodo" class="form-control"
+                               value="{{ mes_ref.strftime('%Y-%m') }}">
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card card-stat border-primary">
+                    <div class="card-body text-center">
+                        <h3 class="mb-0">{{ total }}</h3>
+                        <small class="text-muted">Indicadores</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card card-stat border-warning">
+                    <div class="card-body text-center">
+                        <h3 class="mb-0">{{ preenchidos }}</h3>
+                        <small class="text-muted">Preenchidos</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card card-stat border-success">
+                    <div class="card-body text-center">
+                        <h3 class="mb-0">{{ conferidos }}</h3>
+                        <small class="text-muted">Conferidos</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabela de Indicadores -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-table"></i>
+            Indicadores - {{ mes_ref.strftime('%m/%Y') }}
+        </h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Item</th>
+                        <th>Indicador</th>
+                        <th>Informações Contidas</th>
+                        <th>Resp. Geração</th>
+                        <th>Resp. Conferência</th>
+                        <th>Status</th>
+                        <th width="140">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for categoria in categorias %}
+                    {% set indicadores_ativos = categoria.indicadores.filter_by(ativo=True).all() %}
+                    {% if indicadores_ativos %}
+                    {% for indicador in indicadores_ativos %}
+                    {% set reg = registros_map.get(indicador.id) %}
+                    <tr>
+                        {% if loop.first %}
+                        <td rowspan="{{ indicadores_ativos|length }}" class="align-middle fw-bold bg-light">
+                            {{ categoria.nome }}
+                        </td>
+                        {% endif %}
+                        <td>{{ indicador.nome }}</td>
+                        <td><small class="text-muted">{{ indicador.descricao or '-' }}</small></td>
+                        <td>{{ indicador.responsavel_geracao or '-' }}</td>
+                        <td>{{ indicador.responsavel_conferencia or '-' }}</td>
+                        <td>
+                            {% if reg and reg.status == 'conferido' %}
+                            <span class="badge bg-success">Conferido</span>
+                            {% elif reg and reg.status == 'preenchido' %}
+                            <span class="badge bg-warning text-dark">Preenchido</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Pendente</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('indicadores.registro', indicador_id=indicador.id, periodo=mes_ref.strftime('%Y-%m')) }}"
+                               class="btn btn-sm btn-outline-primary" title="Preencher">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            {% if reg and reg.status == 'preenchido' %}
+                            <form method="POST" action="{{ url_for('indicadores.conferir', id=reg.id) }}"
+                                  style="display:inline">
+                                <button type="submit" class="btn btn-sm btn-outline-success" title="Conferir">
+                                    <i class="bi bi-check-lg"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% endif %}
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            Nenhum indicador cadastrado.
+                            {% if current_user.is_admin() %}
+                            <a href="{{ url_for('indicadores.gerenciar') }}">Cadastrar indicadores</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

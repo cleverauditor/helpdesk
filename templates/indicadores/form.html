@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ 'Editar' if indicador else 'Novo' }} Indicador - Sistemas MaxVia{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>
+        <i class="bi bi-graph-up-arrow"></i>
+        {{ 'Editar Indicador' if indicador else 'Novo Indicador' }}
+    </h2>
+    <a href="{{ url_for('indicadores.gerenciar') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Categoria *</label>
+                            <select name="categoria_id" class="form-select" required>
+                                <option value="">Selecione</option>
+                                {% for cat in categorias %}
+                                <option value="{{ cat.id }}"
+                                        {{ 'selected' if indicador and indicador.categoria_id == cat.id }}>
+                                    {{ cat.nome }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nome do Indicador *</label>
+                            <input type="text" name="nome" class="form-control" required
+                                   value="{{ indicador.nome if indicador else '' }}"
+                                   placeholder="Ex: Pneus">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Informações Contidas</label>
+                        <textarea name="descricao" class="form-control" rows="3"
+                                  placeholder="Descreva quais dados este indicador deve conter">{{ indicador.descricao if indicador else '' }}</textarea>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Responsável Geração de Dados</label>
+                            <input type="text" name="responsavel_geracao" class="form-control"
+                                   value="{{ indicador.responsavel_geracao if indicador else '' }}"
+                                   placeholder="Nome do responsável">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Responsável Fechamento e Conferência</label>
+                            <input type="text" name="responsavel_conferencia" class="form-control"
+                                   value="{{ indicador.responsavel_conferencia if indicador else '' }}"
+                                   placeholder="Nome do responsável">
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> {{ 'Salvar' if indicador else 'Criar' }}
+                        </button>
+                        <a href="{{ url_for('indicadores.gerenciar') }}" class="btn btn-outline-secondary">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

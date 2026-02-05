@@ -597,3 +597,66 @@ class CombustivelMediaPadrao(db.Model):
 
     def __repr__(self):
         return f'<CombustivelMediaPadrao {self.modelo} - {self.media_kml_referencia} Km/L>'
+
+
+# ============================================
+# INDICADORES DIRETORIA
+# ============================================
+
+class IndicadorCategoria(db.Model):
+    __tablename__ = 'indicador_categoria'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False, unique=True)
+    ordem = db.Column(db.Integer, default=0)
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+
+    indicadores = db.relationship('Indicador', backref='categoria', lazy='dynamic',
+                                  order_by='Indicador.ordem')
+
+    def __repr__(self):
+        return f'<IndicadorCategoria {self.nome}>'
+
+
+class Indicador(db.Model):
+    __tablename__ = 'indicador'
+
+    id = db.Column(db.Integer, primary_key=True)
+    categoria_id = db.Column(db.Integer, db.ForeignKey('indicador_categoria.id'), nullable=False)
+    nome = db.Column(db.String(200), nullable=False)
+    descricao = db.Column(db.Text)
+    responsavel_geracao = db.Column(db.String(200))
+    responsavel_conferencia = db.Column(db.String(200))
+    ordem = db.Column(db.Integer, default=0)
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+
+    registros = db.relationship('IndicadorRegistro', backref='indicador', lazy='dynamic',
+                                order_by='IndicadorRegistro.mes_referencia.desc()')
+
+    def __repr__(self):
+        return f'<Indicador {self.nome}>'
+
+
+class IndicadorRegistro(db.Model):
+    __tablename__ = 'indicador_registro'
+
+    id = db.Column(db.Integer, primary_key=True)
+    indicador_id = db.Column(db.Integer, db.ForeignKey('indicador.id'), nullable=False)
+    mes_referencia = db.Column(db.Date, nullable=False)
+    valor_texto = db.Column(db.Text)
+    status = db.Column(db.String(20), default='pendente')  # pendente, preenchido, conferido
+    preenchido_por_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    conferido_por_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    data_preenchimento = db.Column(db.DateTime)
+    data_conferencia = db.Column(db.DateTime)
+    observacoes = db.Column(db.Text)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+
+    preenchido_por = db.relationship('User', foreign_keys=[preenchido_por_id])
+    conferido_por = db.relationship('User', foreign_keys=[conferido_por_id])
+
+    def __repr__(self):
+        return f'<IndicadorRegistro {self.indicador.nome} - {self.mes_referencia}>'

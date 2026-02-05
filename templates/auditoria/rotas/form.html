@@ -145,22 +145,23 @@
                                     <div class="mb-2">
                                         <label class="form-label small">Horário Início</label>
                                         <input type="time" name="turno_inicio" id="turno_inicio" class="form-control form-control-sm"
-                                               value="{{ turno.horario_inicio.strftime('%H:%M') if turno and turno.horario_inicio else '' }}">
+                                               value="{{ turno.horario_inicio.strftime('%H:%M') if turno and turno.horario_inicio else '' }}"
+                                               onchange="calcularTempo()">
                                     </div>
                                 </div>
                                 <div class="col-md-3">
                                     <div class="mb-2">
                                         <label class="form-label small">Horário Término</label>
                                         <input type="time" name="turno_termino" id="turno_termino" class="form-control form-control-sm"
-                                               value="{{ turno.horario_termino.strftime('%H:%M') if turno and turno.horario_termino else '' }}">
+                                               value="{{ turno.horario_termino.strftime('%H:%M') if turno and turno.horario_termino else '' }}"
+                                               onchange="calcularTempo()">
                                     </div>
                                 </div>
                                 <div class="col-md-3">
                                     <div class="mb-2">
-                                        <label class="form-label small">Tempo Trajeto (min)</label>
-                                        <input type="number" name="turno_tempo" id="turno_tempo" class="form-control form-control-sm"
-                                               value="{{ turno.tempo_trajeto_minutos if turno and turno.tempo_trajeto_minutos else '' }}"
-                                               placeholder="Auto do KML">
+                                        <label class="form-label small">Tempo Trajeto</label>
+                                        <input type="text" id="turno_tempo_display" class="form-control form-control-sm" readonly
+                                               value="{{ '%dh%02d' % (turno.tempo_trajeto_minutos // 60, turno.tempo_trajeto_minutos % 60) if turno and turno.tempo_trajeto_minutos else '' }}">
                                     </div>
                                 </div>
                             </div>
@@ -256,6 +257,25 @@ function preencherTurno(select) {
         document.getElementById('turno_nome').value = option.dataset.nome || '';
         document.getElementById('turno_inicio').value = option.dataset.inicio || '';
         document.getElementById('turno_termino').value = option.dataset.termino || '';
+        calcularTempo();
+    }
+}
+
+function calcularTempo() {
+    const inicio = document.getElementById('turno_inicio').value;
+    const termino = document.getElementById('turno_termino').value;
+    const display = document.getElementById('turno_tempo_display');
+
+    if (inicio && termino) {
+        const [hi, mi] = inicio.split(':').map(Number);
+        const [hf, mf] = termino.split(':').map(Number);
+        let minutos = (hf * 60 + mf) - (hi * 60 + mi);
+        if (minutos < 0) minutos += 1440; // turno que cruza meia-noite
+        const h = Math.floor(minutos / 60);
+        const m = minutos % 60;
+        display.value = h + 'h' + String(m).padStart(2, '0');
+    } else {
+        display.value = '';
     }
 }
 </script>

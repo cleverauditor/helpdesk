@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ indicador.nome }} - {{ mes_ref.strftime('%m/%Y') }} - Sistemas MaxVia{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>
+        <i class="bi bi-pencil-square"></i>
+        {{ indicador.nome }}
+        <small class="text-muted">- {{ mes_ref.strftime('%m/%Y') }}</small>
+    </h2>
+    <a href="{{ url_for('indicadores.painel', periodo=periodo) }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-clipboard-data"></i> Dados do Indicador
+            </div>
+            <div class="card-body">
+                <!-- Info do indicador -->
+                <div class="alert alert-light">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <small class="text-muted d-block">Categoria</small>
+                            <strong>{{ indicador.categoria.nome }}</strong>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted d-block">Resp. Geração</small>
+                            <strong>{{ indicador.responsavel_geracao or '-' }}</strong>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted d-block">Resp. Conferência</small>
+                            <strong>{{ indicador.responsavel_conferencia or '-' }}</strong>
+                        </div>
+                    </div>
+                    {% if indicador.descricao %}
+                    <hr class="my-2">
+                    <small class="text-muted">{{ indicador.descricao }}</small>
+                    {% endif %}
+                </div>
+
+                {% if registro and registro.status == 'conferido' %}
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle-fill"></i>
+                    Este indicador já foi conferido por {{ registro.conferido_por.nome }}
+                    em {{ registro.data_conferencia.strftime('%d/%m/%Y %H:%M') }}.
+                </div>
+                {% endif %}
+
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Dados / Resultados</label>
+                        <textarea name="valor_texto" class="form-control" rows="8"
+                                  placeholder="Insira os dados do indicador para o mês {{ mes_ref.strftime('%m/%Y') }}">{{ registro.valor_texto if registro else '' }}</textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Observações</label>
+                        <textarea name="observacoes" class="form-control" rows="3"
+                                  placeholder="Observações adicionais">{{ registro.observacoes if registro else '' }}</textarea>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> Salvar
+                        </button>
+                        <a href="{{ url_for('indicadores.painel', periodo=periodo) }}"
+                           class="btn btn-outline-secondary">Cancelar</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <!-- Status Atual -->
+        {% if registro %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Status
+            </div>
+            <div class="card-body">
+                <p class="mb-1">
+                    <strong>Status:</strong>
+                    {% if registro.status == 'conferido' %}
+                    <span class="badge bg-success">Conferido</span>
+                    {% elif registro.status == 'preenchido' %}
+                    <span class="badge bg-warning text-dark">Preenchido</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Pendente</span>
+                    {% endif %}
+                </p>
+                {% if registro.preenchido_por %}
+                <p class="mb-1 small">
+                    <strong>Preenchido por:</strong> {{ registro.preenchido_por.nome }}<br>
+                    <strong>Em:</strong> {{ registro.data_preenchimento.strftime('%d/%m/%Y %H:%M') }}
+                </p>
+                {% endif %}
+                {% if registro.conferido_por %}
+                <p class="mb-0 small">
+                    <strong>Conferido por:</strong> {{ registro.conferido_por.nome }}<br>
+                    <strong>Em:</strong> {{ registro.data_conferencia.strftime('%d/%m/%Y %H:%M') }}
+                </p>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Histórico -->
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-clock-history"></i> Histórico Recente
+            </div>
+            <div class="card-body p-0">
+                {% if historico %}
+                <ul class="list-group list-group-flush">
+                    {% for h in historico %}
+                    <li class="list-group-item px-3 py-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small>{{ h.mes_referencia.strftime('%m/%Y') }}</small>
+                            {% if h.status == 'conferido' %}
+                            <span class="badge bg-success">Conferido</span>
+                            {% elif h.status == 'preenchido' %}
+                            <span class="badge bg-warning text-dark">Preenchido</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Pendente</span>
+                            {% endif %}
+                        </div>
+                        {% if h.valor_texto %}
+                        <small class="text-muted">{{ h.valor_texto[:60] }}{% if h.valor_texto|length > 60 %}...{% endif %}</small>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-center py-3 mb-0">Nenhum registro anterior.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

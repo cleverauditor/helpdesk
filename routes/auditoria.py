@@ -277,15 +277,12 @@ def criar_rota():
                 rota.arquivo_kml = unique_filename
                 rota.arquivo_kml_nome = filename
 
-                # Calcular KM e tempo de trajeto do arquivo KML
-                tempo_calculado = None
+                # Calcular KM do arquivo KML
                 try:
                     from kml_utils import analisar_kml
                     analise = analisar_kml(filepath)
                     if analise['km']:
                         rota.km_atual = analise['km']
-                    if analise['tempo_minutos']:
-                        tempo_calculado = analise['tempo_minutos']
                 except Exception as e:
                     current_app.logger.error(f'Erro ao analisar KML: {e}')
 
@@ -300,11 +297,13 @@ def criar_rota():
                 horario_inicio = datetime.strptime(turno_inicio_str, '%H:%M').time()
                 horario_termino = datetime.strptime(turno_termino_str, '%H:%M').time()
                 turno_nome = request.form.get('turno_nome', '').strip()
-                turno_tempo = request.form.get('turno_tempo', type=int)
 
-                # Usar tempo calculado do KML se não informado manualmente
-                if not turno_tempo and tempo_calculado:
-                    turno_tempo = tempo_calculado
+                # Calcular tempo de trajeto: hora fim - hora início
+                minutos_inicio = horario_inicio.hour * 60 + horario_inicio.minute
+                minutos_termino = horario_termino.hour * 60 + horario_termino.minute
+                turno_tempo = minutos_termino - minutos_inicio
+                if turno_tempo < 0:
+                    turno_tempo += 1440  # cruza meia-noite
 
                 turno = RotaTurno(
                     rota_id=rota.id,
@@ -450,17 +449,12 @@ def editar_rota(id):
                 rota.arquivo_kml = unique_filename
                 rota.arquivo_kml_nome = filename
 
-                # Calcular KM e tempo de trajeto do arquivo KML
+                # Calcular KM do arquivo KML
                 try:
                     from kml_utils import analisar_kml
                     analise = analisar_kml(filepath)
                     if analise['km']:
                         rota.km_atual = analise['km']
-                    # Atualizar tempo do turno se existir
-                    if analise['tempo_minutos']:
-                        turno_existente = rota.turnos.filter_by(ativo=True).first()
-                        if turno_existente and not turno_existente.tempo_trajeto_minutos:
-                            turno_existente.tempo_trajeto_minutos = analise['tempo_minutos']
                 except Exception as e:
                     current_app.logger.error(f'Erro ao analisar KML: {e}')
 
@@ -474,16 +468,20 @@ def editar_rota(id):
                 horario_inicio = datetime.strptime(turno_inicio_str, '%H:%M').time()
                 horario_termino = datetime.strptime(turno_termino_str, '%H:%M').time()
                 turno_nome = request.form.get('turno_nome', '').strip()
-                turno_tempo = request.form.get('turno_tempo', type=int)
+
+                # Calcular tempo de trajeto: hora fim - hora início
+                minutos_inicio = horario_inicio.hour * 60 + horario_inicio.minute
+                minutos_termino = horario_termino.hour * 60 + horario_termino.minute
+                turno_tempo = minutos_termino - minutos_inicio
+                if turno_tempo < 0:
+                    turno_tempo += 1440  # cruza meia-noite
 
                 if turno_existente:
-                    # Atualizar turno existente
                     turno_existente.nome = turno_nome
                     turno_existente.horario_inicio = horario_inicio
                     turno_existente.horario_termino = horario_termino
                     turno_existente.tempo_trajeto_minutos = turno_tempo
                 else:
-                    # Criar novo turno
                     turno = RotaTurno(
                         rota_id=rota.id,
                         nome=turno_nome,

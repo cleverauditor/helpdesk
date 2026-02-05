@@ -124,6 +124,8 @@
                                         <i class="bi bi-signpost-2 text-primary"></i>
                                         {% elif categoria.nome == 'Análise de Combustível' %}
                                         <i class="bi bi-fuel-pump text-warning"></i>
+                                        {% elif categoria.nome == 'Indicadores Diretoria' %}
+                                        <i class="bi bi-graph-up-arrow text-danger"></i>
                                         {% else %}
                                         <i class="bi bi-tag text-muted"></i>
                                         {% endif %}
@@ -171,6 +173,7 @@
             <div class="card-body">
                 <p class="small"><strong>Auditoria:</strong> Dá acesso ao módulo de Auditoria de Rotas.</p>
                 <p class="small"><strong>Análise de Combustível:</strong> Dá acesso ao módulo de Análise de Combustível.</p>
+                <p class="small"><strong>Indicadores Diretoria:</strong> Dá acesso ao painel de indicadores gerenciais.</p>
                 <p class="small mb-0"><strong>Categorias de atendimento:</strong> Definem quais chamados o usuário pode ver ou abrir. Sem seleção = acesso a todas.</p>
             </div>
         </div>

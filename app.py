@@ -8,7 +8,7 @@ load_dotenv(os.path.join(basedir, '.env'))
 from flask import Flask, redirect, url_for, render_template
 from flask_login import LoginManager, login_required, current_user
 from config import Config
-from models import db, User, Category, SLAConfig
+from models import db, User, Category, SLAConfig, IndicadorCategoria, Indicador
 
 def create_app():
     app = Flask(__name__)
@@ -38,6 +38,7 @@ def create_app():
     from routes.reports import reports_bp
     from routes.auditoria import auditoria_bp
     from routes.clientes import clientes_bp
+    from routes.indicadores import indicadores_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(tickets_bp)
@@ -46,6 +47,7 @@ def create_app():
     app.register_blueprint(reports_bp)
     app.register_blueprint(auditoria_bp)
     app.register_blueprint(clientes_bp)
+    app.register_blueprint(indicadores_bp)
 
     # Rota raiz - Página de módulos
     @app.route('/')
@@ -105,6 +107,19 @@ def create_app():
                 'icone': 'bi-building',
                 'cor': '#0d6efd',
                 'url': url_for('clientes.lista')
+            })
+
+        # Indicadores Diretoria
+        tem_indicadores = current_user.is_admin() or \
+            current_user.categorias.filter_by(nome='Indicadores Diretoria').first()
+
+        if tem_indicadores:
+            modulos.append({
+                'nome': 'Indicadores Diretoria',
+                'descricao': 'Indicadores gerenciais e acompanhamento mensal pela diretoria.',
+                'icone': 'bi-graph-up-arrow',
+                'cor': '#dc3545',
+                'url': url_for('indicadores.painel')
             })
 
         # Administração - admin only
@@ -173,12 +188,60 @@ def init_data():
         ('Sugestões', 'Sugestões e melhorias'),
         ('Outros', 'Outros assuntos'),
         ('Auditoria', 'Acesso ao módulo de auditoria de rotas'),
-        ('Análise de Combustível', 'Acesso ao módulo de análise de combustível')
+        ('Análise de Combustível', 'Acesso ao módulo de análise de combustível'),
+        ('Indicadores Diretoria', 'Acesso ao módulo de indicadores gerenciais')
     ]
     for nome, descricao in categorias_padrao:
         if not Category.query.filter_by(nome=nome).first():
             cat = Category(nome=nome, descricao=descricao)
             db.session.add(cat)
+
+    # Criar indicadores padrão
+    if not IndicadorCategoria.query.first():
+        indicadores_padrao = [
+            ('CONSUMO', [
+                ('Pneus', 'Km 1ª Vida e Reformas das medidas 275 e 215, 295, Custo Por Km para as unidades (BH, Anglo e Lafaiete)', 'Victor Maffia', 'Christiane Henriques'),
+                ('Combustível', 'Média Geral de Consumo - ROUXINOL e SUDOESTINO', 'Victor Maffia', ''),
+            ]),
+            ('MECÂNICA', [
+                ('Socorros e Atrasos por Companhia', 'Quantidade de socorros e de atrasos ocorridos por companhia (responsável: Rouxinol ou não) - Estratificar motivos', 'Leandro Oliveira', ''),
+            ]),
+            ('MANUTENÇÃO VISUAL', [
+                ('Reparos identificados', 'Quantidade de reparos total X Quantidade de reparos com identificação do responsável', 'Oziel Carvalho', ''),
+                ('Reforma geral', 'Quantidade de veículos reformados no mês', 'Oziel Carvalho', ''),
+            ]),
+            ('EFICIÊNCIA NA ESCALA', [
+                ('Redução de KM Improdutivo', 'Kms improdutivos reduzidos no mês', 'Renata / Wesley', ''),
+                ('Implantação de Duplas', 'Implantação de duplas de motoristas', 'Renata / Wesley', ''),
+                ('Jornada de descanso 11 horas', 'Quantidade de colaboradores dentro do padrão de 11 horas de descanso', 'Renata / Wesley', ''),
+                ('Horas Extras', 'Redução das horas extras realizadas', 'Renata / Wesley', ''),
+            ]),
+            ('RECURSOS HUMANOS', [
+                ('Absenteísmo', 'Quantidade por setor', 'Jessica Custódio', 'Liwshanna Oliveira'),
+                ('Turnover', 'Número real de colaboradores do setor/contratados/demitidos', 'Jessica Custódio', ''),
+            ]),
+            ('DEPTO PESSOAL', [
+                ('Atestados', 'Número total / número por setor', 'Jorgeane Reis', ''),
+            ]),
+            ('COMPRAS E ESTOQUE', [
+                ('Eficiência na compra', 'Evolução dos custos de aquisição, preço médio, curva ABC, quantidades, etc', 'Adeilson Martins', 'Simone Thais'),
+                ('Compras com cercas limites e através de autorizações', 'Analisar compras fora do limite (alçada)', 'Adeilson Martins', ''),
+            ]),
+        ]
+        for ordem_cat, (cat_nome, indicadores) in enumerate(indicadores_padrao):
+            cat = IndicadorCategoria(nome=cat_nome, ordem=ordem_cat)
+            db.session.add(cat)
+            db.session.flush()
+            for ordem_ind, (ind_nome, ind_desc, resp_ger, resp_conf) in enumerate(indicadores):
+                ind = Indicador(
+                    categoria_id=cat.id,
+                    nome=ind_nome,
+                    descricao=ind_desc,
+                    responsavel_geracao=resp_ger,
+                    responsavel_conferencia=resp_conf,
+                    ordem=ordem_ind
+                )
+                db.session.add(ind)
 
     db.session.commit()
 

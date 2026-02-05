@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+
+{% block title %}Gerenciar Indicadores - Sistemas MaxVia{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-gear"></i> Gerenciar Indicadores</h2>
+    <div>
+        <a href="{{ url_for('indicadores.criar') }}" class="btn btn-primary me-2">
+            <i class="bi bi-plus-lg"></i> Novo Indicador
+        </a>
+        <a href="{{ url_for('indicadores.painel') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        {% for categoria in categorias %}
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    {% if categoria.ativo %}
+                    <i class="bi bi-folder2-open text-primary"></i>
+                    {% else %}
+                    <i class="bi bi-folder2 text-muted"></i>
+                    {% endif %}
+                    {{ categoria.nome }}
+                    {% if not categoria.ativo %}
+                    <span class="badge bg-secondary">Inativa</span>
+                    {% endif %}
+                </h5>
+                <form method="POST" action="{{ url_for('indicadores.toggle_categoria', id=categoria.id) }}"
+                      style="display:inline">
+                    <button type="submit"
+                            class="btn btn-sm btn-outline-{{ 'danger' if categoria.ativo else 'success' }}"
+                            title="{{ 'Desativar' if categoria.ativo else 'Ativar' }}">
+                        <i class="bi bi-{{ 'x-circle' if categoria.ativo else 'check-circle' }}"></i>
+                    </button>
+                </form>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Indicador</th>
+                            <th>Resp. Geração</th>
+                            <th>Resp. Conferência</th>
+                            <th>Status</th>
+                            <th width="100">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for indicador in categoria.indicadores.all() %}
+                        <tr class="{{ 'text-muted' if not indicador.ativo }}">
+                            <td>
+                                <strong>{{ indicador.nome }}</strong>
+                                {% if indicador.descricao %}
+                                <br><small class="text-muted">{{ indicador.descricao[:80] }}{% if indicador.descricao|length > 80 %}...{% endif %}</small>
+                                {% endif %}
+                            </td>
+                            <td>{{ indicador.responsavel_geracao or '-' }}</td>
+                            <td>{{ indicador.responsavel_conferencia or '-' }}</td>
+                            <td>
+                                {% if indicador.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('indicadores.editar', id=indicador.id) }}"
+                                   class="btn btn-sm btn-outline-secondary" title="Editar">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form method="POST" action="{{ url_for('indicadores.toggle', id=indicador.id) }}"
+                                      style="display:inline">
+                                    <button type="submit"
+                                            class="btn btn-sm btn-outline-{{ 'danger' if indicador.ativo else 'success' }}"
+                                            title="{{ 'Desativar' if indicador.ativo else 'Ativar' }}">
+                                        <i class="bi bi-{{ 'x-circle' if indicador.ativo else 'check-circle' }}"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-3">
+                                Nenhum indicador nesta categoria.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            Nenhuma categoria cadastrada. Crie uma categoria primeiro.
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Nova Categoria</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('indicadores.criar_categoria') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Nome *</label>
+                        <input type="text" name="nome" class="form-control" required
+                               placeholder="Ex: CONSUMO">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-check-lg"></i> Criar Categoria
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

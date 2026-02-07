@@ -322,14 +322,15 @@ def clusterizar(id):
     rot = Roteirizacao.query.get_or_404(id)
     rutils.init_api_key(current_app.config['GOOGLE_MAPS_API_KEY'])
 
-    # Limpar paradas anteriores
-    PontoParada.query.filter_by(roteirizacao_id=id).delete()
-    RoteiroPlanejado.query.filter_by(roteirizacao_id=id).delete()
-    # Resetar atribuições dos passageiros
+    # Resetar atribuições dos passageiros (antes de deletar paradas)
     for p in rot.passageiros.filter_by(ativo=True).all():
         p.parada_id = None
         p.distancia_ate_parada = None
         p.tempo_no_veiculo = None
+    db.session.flush()
+    # Limpar paradas e roteiros anteriores
+    PontoParada.query.filter_by(roteirizacao_id=id).delete()
+    RoteiroPlanejado.query.filter_by(roteirizacao_id=id).delete()
 
     # Pegar passageiros geocodificados
     passageiros = rot.passageiros.filter(

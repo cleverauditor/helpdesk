@@ -764,6 +764,30 @@ def relatorio(id):
                            tipos_veiculo=tipos_veiculo)
 
 
+@roteirizador_bp.route('/<int:id>/relatorio/simulacao/<int:sim_id>')
+@roteirizador_required
+def relatorio_simulacao(id, sim_id):
+    rot = Roteirizacao.query.get_or_404(id)
+    sim = Simulacao.query.get_or_404(sim_id)
+
+    if sim.roteirizacao_id != rot.id:
+        flash('Simulação não pertence a esta roteirização.', 'danger')
+        return redirect(url_for('roteirizador.visualizar', id=id))
+
+    dados = json.loads(sim.dados_json)
+    tipos_veiculo = TipoVeiculo.query.filter_by(ativo=True).order_by(TipoVeiculo.capacidade).all()
+    passageiros = rot.passageiros.filter_by(ativo=True).order_by(Passageiro.nome).all()
+    api_key = current_app.config['GOOGLE_MAPS_API_KEY']
+
+    return render_template('roteirizador/relatorio_simulacao.html',
+                           rot=rot,
+                           sim=sim,
+                           dados=dados,
+                           passageiros=passageiros,
+                           api_key=api_key,
+                           tipos_veiculo=tipos_veiculo)
+
+
 # ============================================
 # EXPORTAR KML
 # ============================================

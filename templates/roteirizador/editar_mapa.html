@@ -1,0 +1,374 @@
+{% extends 'base.html' %}
+{% block title %}Editar Mapa - {{ rot.nome }}{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Esconder sidebar e usar tela cheia */
+.sidebar { display: none !important; }
+.main-content { margin-left: 0 !important; padding: 0 !important; }
+.container-fluid { padding: 0 !important; max-width: 100% !important; }
+body { overflow: hidden; }
+.edit-container { display: flex; height: calc(100vh - 0px); }
+.edit-map { flex: 1; position: relative; }
+#mapEdit { width: 100%; height: 100%; }
+.edit-panel {
+    width: 340px; min-width: 340px;
+    background: #fff; border-left: 1px solid #dee2e6;
+    display: flex; flex-direction: column; overflow: hidden;
+}
+.panel-header {
+    padding: 1rem; background: linear-gradient(135deg, #333 0%, #20c997 100%);
+    color: white; flex-shrink: 0;
+}
+.panel-header h5 { margin: 0; }
+.panel-body { flex: 1; overflow-y: auto; padding: 0; }
+.panel-footer { padding: 1rem; border-top: 1px solid #dee2e6; flex-shrink: 0; background: #f8f9fa; }
+.route-item {
+    padding: 0.75rem 1rem; border-bottom: 1px solid #eee;
+    cursor: pointer; transition: background 0.15s;
+}
+.route-item:hover { background: #f8f9fa; }
+.route-item.active { background: #e8f4f8; border-left: 4px solid #0d6efd; }
+.route-item .route-color {
+    display: inline-block; width: 14px; height: 14px;
+    border-radius: 50%; margin-right: 8px; vertical-align: middle;
+}
+.route-item .route-stats { font-size: 0.82rem; color: #6c757d; margin-top: 4px; }
+.status-badge {
+    font-size: 0.7rem; padding: 2px 8px; border-radius: 10px;
+    background: #e9ecef; color: #6c757d;
+}
+.status-badge.editing { background: #fff3cd; color: #856404; }
+.status-badge.saved { background: #d1e7dd; color: #0f5132; }
+.edit-instructions {
+    padding: 1rem; background: #fff3cd; border-bottom: 1px solid #eee;
+    font-size: 0.85rem; display: none;
+}
+.edit-instructions.visible { display: block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="edit-container">
+    <!-- Mapa -->
+    <div class="edit-map">
+        <div id="mapEdit"></div>
+    </div>
+
+    <!-- Painel lateral -->
+    <div class="edit-panel">
+        <div class="panel-header">
+            <h5><i class="bi bi-pencil-square"></i> Editar Trajeto</h5>
+            <small class="opacity-75">{{ rot.nome }}</small>
+        </div>
+
+        <div id="editInstructions" class="edit-instructions">
+            <i class="bi bi-info-circle"></i> Arraste os pontos azuis na rota para ajustar o trajeto. Clique em <strong>Salvar Rota</strong> quando terminar.
+        </div>
+
+        <div class="panel-body">
+            <!-- Lista de rotas -->
+            <div class="p-2">
+                <small class="text-muted fw-bold text-uppercase px-2">Selecione uma rota para editar</small>
+            </div>
+            {% for r in roteiros %}
+            <div class="route-item" id="routeItem{{ r.id }}" onclick="selecionarRota({{ r.id }}, {{ loop.index0 }})">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="route-color" style="background: {{ ['#E82000','#0d6efd','#198754','#6f42c1','#fd7e14','#dc3545'][loop.index0 % 6] }};"></span>
+                        <strong>{{ r.nome }}</strong>
+                    </div>
+                    <span class="status-badge" id="statusBadge{{ r.id }}">-</span>
+                </div>
+                <div class="route-stats ms-4">
+                    <i class="bi bi-speedometer2"></i> {{ r.distancia_km or '-' }} km
+                    &middot; <i class="bi bi-clock"></i> {{ r.duracao_minutos or '-' }} min
+                    &middot; <i class="bi bi-people-fill"></i> {{ r.total_passageiros or 0 }} pass.
+                    {% if r.horario_saida %}
+                    <br><i class="bi bi-box-arrow-right"></i> Saida: {{ r.horario_saida.strftime('%H:%M') }}
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="panel-footer">
+            <button class="btn btn-success w-100 mb-2" id="btnSalvar" onclick="salvarRotaEditada()" disabled>
+                <i class="bi bi-check-lg"></i> Salvar Rota
+            </button>
+            <a href="{{ url_for('roteirizador.visualizar', id=rot.id) }}" class="btn btn-outline-secondary w-100">
+                <i class="bi bi-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://maps.googleapis.com/maps/api/js?key={{ api_key }}&libraries=geometry&callback=initEditMap" async defer></script>
+<script>
+var ROUTE_COLORS = ['#E82000', '#0d6efd', '#198754', '#6f42c1', '#fd7e14', '#dc3545'];
+var map, bounds;
+var directionsService, directionsRenderer;
+var staticPolylines = [];
+var passMarkers = [];
+var stopMarkers = [];
+var currentRoteiroId = null;
+var currentRoteiroIdx = null;
+var rotaModificada = false;
+
+var destinoPos = { lat: {{ rot.destino_lat }}, lng: {{ rot.destino_lng }} };
+
+var roteirosData = [
+    {% for r in roteiros %}
+    { id: {{ r.id }}, nome: {{ r.nome|tojson }}, idx: {{ loop.index0 }} },
+    {% endfor %}
+];
+
+var paradasData = [
+    {% for p in paradas %}
+    { id: {{ p.id }}, lat: {{ p.lat }}, lng: {{ p.lng }}, nome: {{ p.nome|tojson }}, ordem: {{ p.ordem|default(0, true)|tojson }}, total: {{ p.total_passageiros }}, roteiroId: {{ p.roteiro_id|default('null', true) }} },
+    {% endfor %}
+];
+
+var passageirosData = [
+    {% for p in passageiros %}{% if p.lat and p.lng %}
+    { lat: {{ p.lat }}, lng: {{ p.lng }}, nome: {{ p.nome|tojson }}, roteiroId: {{ p.parada.roteiro_id if p.parada and p.parada.roteiro_id else 'null' }} },
+    {% endif %}{% endfor %}
+];
+
+var roteirosPolylines = [
+    {% for r in roteiros %}{% if r.polyline_encoded %}
+    { id: {{ r.id }}, encoded: {{ r.polyline_encoded|tojson }}, idx: {{ loop.index0 }} },
+    {% endif %}{% endfor %}
+];
+
+function personIcon(color) {
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="-2 -2 20 20">' +
+        '<circle cx="8" cy="8" r="9" fill="' + color + '" stroke="white" stroke-width="1.5"/>' +
+        '<path d="M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H3zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" fill="white"/>' +
+        '</svg>';
+    return { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg), scaledSize: new google.maps.Size(24, 24), anchor: new google.maps.Point(12, 12) };
+}
+
+function stopIcon(color, numero) {
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="44" viewBox="0 0 36 44">' +
+        '<path d="M18 44 C18 44 36 26 36 18 C36 8 28 0 18 0 C8 0 0 8 0 18 C0 26 18 44 18 44Z" fill="' + color + '" stroke="white" stroke-width="2"/>' +
+        '<circle cx="18" cy="18" r="12" fill="white" opacity="0.9"/>' +
+        '<text x="18" y="23" text-anchor="middle" font-size="14" font-weight="bold" fill="' + color + '">' + numero + '</text>' +
+        '</svg>';
+    return { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg), scaledSize: new google.maps.Size(32, 40), anchor: new google.maps.Point(16, 40) };
+}
+
+function initEditMap() {
+    map = new google.maps.Map(document.getElementById('mapEdit'), {
+        zoom: 12, center: destinoPos, mapTypeControl: true, streetViewControl: false, fullscreenControl: false
+    });
+    directionsService = new google.maps.DirectionsService();
+    bounds = new google.maps.LatLngBounds();
+    bounds.extend(destinoPos);
+
+    // Mapa de cores
+    var roteiroColorMap = {};
+    roteirosData.forEach(function(r) {
+        roteiroColorMap[r.id] = ROUTE_COLORS[r.idx % ROUTE_COLORS.length];
+    });
+
+    // Destino
+    var destinoSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="48" viewBox="0 0 40 48">' +
+        '<path d="M20 48 C20 48 40 30 40 20 C40 9 31 0 20 0 C9 0 0 9 0 20 C0 30 20 48 20 48Z" fill="#dc3545" stroke="white" stroke-width="2"/>' +
+        '<rect x="11" y="9" width="18" height="22" rx="1" fill="white"/>' +
+        '<rect x="14" y="12" width="4" height="4" rx="0.5" fill="#dc3545"/>' +
+        '<rect x="22" y="12" width="4" height="4" rx="0.5" fill="#dc3545"/>' +
+        '<rect x="14" y="19" width="4" height="4" rx="0.5" fill="#dc3545"/>' +
+        '<rect x="22" y="19" width="4" height="4" rx="0.5" fill="#dc3545"/>' +
+        '<rect x="17" y="25" width="6" height="6" fill="#dc3545"/>' +
+        '</svg>';
+    new google.maps.Marker({
+        position: destinoPos, map: map,
+        icon: { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(destinoSvg), scaledSize: new google.maps.Size(36, 44), anchor: new google.maps.Point(18, 44) },
+        title: 'Destino: ' + {{ rot.destino_endereco|tojson }}, zIndex: 1000
+    });
+
+    // Passageiros
+    passageirosData.forEach(function(p) {
+        var color = (p.roteiroId && roteiroColorMap[p.roteiroId]) ? roteiroColorMap[p.roteiroId] : '#6c757d';
+        var m = new google.maps.Marker({
+            position: { lat: p.lat, lng: p.lng }, map: map, icon: personIcon(color), title: p.nome, zIndex: 10
+        });
+        passMarkers.push(m);
+        bounds.extend({ lat: p.lat, lng: p.lng });
+    });
+
+    // Paradas
+    paradasData.forEach(function(p) {
+        var color = (p.roteiroId && roteiroColorMap[p.roteiroId]) ? roteiroColorMap[p.roteiroId] : '#6c757d';
+        var m = new google.maps.Marker({
+            position: { lat: p.lat, lng: p.lng }, map: map,
+            icon: stopIcon(color, p.ordem), title: p.nome + ' - ' + p.total + ' pass.', zIndex: 100
+        });
+        m._roteiroId = p.roteiroId;
+        stopMarkers.push(m);
+        bounds.extend({ lat: p.lat, lng: p.lng });
+    });
+
+    // Polylines
+    roteirosPolylines.forEach(function(r) {
+        try {
+            var poly = new google.maps.Polyline({
+                path: google.maps.geometry.encoding.decodePath(r.encoded),
+                geodesic: true, strokeColor: ROUTE_COLORS[r.idx % ROUTE_COLORS.length],
+                strokeOpacity: 0.85, strokeWeight: 5, map: map
+            });
+            poly._roteiroId = r.id;
+            poly._idx = r.idx;
+            staticPolylines.push(poly);
+        } catch(e) { console.error('Erro polyline:', e); }
+    });
+
+    if (!bounds.getNorthEast().equals(bounds.getSouthWest())) {
+        map.fitBounds(bounds, 50);
+    }
+}
+
+function selecionarRota(roteiroId, idx) {
+    if (currentRoteiroId === roteiroId) return;
+
+    // Se tinha rota em edição não salva, avisar
+    if (rotaModificada) {
+        if (!confirm('Rota atual não foi salva. Descartar alterações?')) return;
+    }
+
+    // Limpar edição anterior
+    if (directionsRenderer) {
+        directionsRenderer.setMap(null);
+        directionsRenderer = null;
+    }
+
+    // Restaurar polylines estáticas
+    staticPolylines.forEach(function(p) { p.setMap(map); });
+    stopMarkers.forEach(function(m) { m.setMap(map); });
+
+    // Atualizar UI
+    document.querySelectorAll('.route-item').forEach(function(el) { el.classList.remove('active'); });
+    document.getElementById('routeItem' + roteiroId).classList.add('active');
+    document.getElementById('editInstructions').classList.add('visible');
+
+    currentRoteiroId = roteiroId;
+    currentRoteiroIdx = idx;
+    rotaModificada = false;
+
+    // Esconder polyline estática da rota selecionada
+    staticPolylines.forEach(function(p) {
+        if (p._roteiroId === roteiroId) p.setMap(null);
+    });
+
+    // Esconder paradas de OUTRAS rotas (manter só as da rota editada)
+    stopMarkers.forEach(function(m) {
+        m.setMap(m._roteiroId === roteiroId ? null : map);
+    });
+
+    // Criar DirectionsRenderer
+    var routeColor = ROUTE_COLORS[idx % ROUTE_COLORS.length];
+    directionsRenderer = new google.maps.DirectionsRenderer({
+        map: map, draggable: true, suppressMarkers: false,
+        polylineOptions: { strokeColor: routeColor, strokeWeight: 6, strokeOpacity: 0.9 }
+    });
+
+    directionsRenderer.addListener('directions_changed', function() {
+        rotaModificada = true;
+        document.getElementById('btnSalvar').disabled = false;
+        var badge = document.getElementById('statusBadge' + roteiroId);
+        badge.textContent = 'Modificada';
+        badge.className = 'status-badge editing';
+    });
+
+    // Carregar rota no DirectionsRenderer
+    var paradasRoteiro = paradasData.filter(function(p) { return p.roteiroId === roteiroId; });
+
+    if (paradasRoteiro.length === 0) {
+        alert('Nenhuma parada nesta rota.');
+        return;
+    }
+
+    var origin = { lat: paradasRoteiro[0].lat, lng: paradasRoteiro[0].lng };
+    var waypoints = [];
+    for (var i = 1; i < paradasRoteiro.length; i++) {
+        waypoints.push({ location: { lat: paradasRoteiro[i].lat, lng: paradasRoteiro[i].lng }, stopover: true });
+    }
+
+    directionsService.route({
+        origin: origin, destination: destinoPos,
+        waypoints: waypoints, travelMode: google.maps.TravelMode.DRIVING
+    }, function(result, status) {
+        if (status === 'OK') {
+            directionsRenderer.setDirections(result);
+            document.getElementById('btnSalvar').disabled = true;
+        } else {
+            alert('Erro ao carregar rota: ' + status);
+        }
+    });
+}
+
+function salvarRotaEditada() {
+    if (!directionsRenderer || !currentRoteiroId) return;
+
+    var directions = directionsRenderer.getDirections();
+    if (!directions || !directions.routes || !directions.routes[0]) {
+        alert('Nenhuma rota para salvar.');
+        return;
+    }
+
+    var route = directions.routes[0];
+    var legs = route.legs.map(function(leg) {
+        return { distance_m: leg.distance.value, duration_s: leg.duration.value };
+    });
+
+    var polyline = google.maps.geometry.encoding.encodePath(route.overview_path);
+
+    var paradasRoteiro = paradasData.filter(function(p) { return p.roteiroId === currentRoteiroId; });
+    var waypoints = [];
+    for (var i = 0; i < route.legs.length && i < paradasRoteiro.length; i++) {
+        var loc = route.legs[i].start_location;
+        waypoints.push({ lat: loc.lat(), lng: loc.lng(), parada_id: paradasRoteiro[i].id });
+    }
+
+    var btn = document.getElementById('btnSalvar');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Salvando...';
+
+    fetch('{{ url_for("roteirizador.salvar_rota_editada", id=rot.id) }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roteiro_id: currentRoteiroId, polyline: polyline, legs: legs, waypoints: waypoints })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        btn.innerHTML = '<i class="bi bi-check-lg"></i> Salvar Rota';
+        if (data.ok) {
+            rotaModificada = false;
+            var badge = document.getElementById('statusBadge' + currentRoteiroId);
+            badge.textContent = 'Salva';
+            badge.className = 'status-badge saved';
+
+            // Atualizar stats na lista
+            var totalDist = legs.reduce(function(s, l) { return s + l.distance_m; }, 0);
+            var totalDur = legs.reduce(function(s, l) { return s + l.duration_s; }, 0);
+            var item = document.getElementById('routeItem' + currentRoteiroId);
+            var statsEl = item.querySelector('.route-stats');
+            statsEl.innerHTML = '<i class="bi bi-speedometer2"></i> ' + (totalDist / 1000).toFixed(1) + ' km' +
+                ' &middot; <i class="bi bi-clock"></i> ' + Math.round(totalDur / 60) + ' min' +
+                ' &middot; <i class="bi bi-people-fill"></i> ' + paradasRoteiro.reduce(function(s, p) { return s + p.total; }, 0) + ' pass.';
+        } else {
+            btn.disabled = false;
+            alert('Erro: ' + (data.msg || 'Falha ao salvar'));
+        }
+    })
+    .catch(function(err) {
+        btn.innerHTML = '<i class="bi bi-check-lg"></i> Salvar Rota';
+        btn.disabled = false;
+        alert('Erro: ' + err);
+    });
+}
+</script>
+{% endblock %}

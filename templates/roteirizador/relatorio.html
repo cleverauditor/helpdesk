@@ -1,0 +1,348 @@
+{% extends 'base.html' %}
+{% block title %}Relatório - {{ rot.nome }}{% endblock %}
+
+{% block extra_css %}
+<style>
+#mapRelatorio { height: 400px; border-radius: 8px; }
+.report-header { background: linear-gradient(135deg, #333 0%, #20c997 100%); color: white; padding: 2rem; border-radius: 8px; margin-bottom: 2rem; }
+.report-header h2 { margin: 0; }
+.summary-card { background: white; border-radius: 8px; padding: 1.5rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.summary-card .value { font-size: 2rem; font-weight: 800; color: #20c997; }
+.summary-card .label { font-size: 0.85rem; color: #6c757d; }
+@media print {
+    .no-print { display: none !important; }
+    .report-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Header do Relatório -->
+<div class="report-header">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h2><i class="bi bi-file-earmark-text"></i> Relatório de Roteirização</h2>
+            <h4 class="mt-2 mb-0">{{ rot.nome }}</h4>
+            {% if rot.cliente %}<p class="mb-0 mt-1 opacity-75">Cliente: {{ rot.cliente.nome }}</p>{% endif %}
+        </div>
+        <div class="no-print">
+            <form method="POST" action="{{ url_for('roteirizador.exportar_kml', id=rot.id) }}" class="d-inline">
+                <button class="btn btn-light btn-sm"><i class="bi bi-download"></i> KML</button>
+            </form>
+            <form method="POST" action="{{ url_for('roteirizador.exportar_csv', id=rot.id) }}" class="d-inline">
+                <button class="btn btn-light btn-sm"><i class="bi bi-filetype-csv"></i> CSV</button>
+            </form>
+            <button class="btn btn-light btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Imprimir</button>
+        </div>
+    </div>
+</div>
+
+<!-- Resumo Geral -->
+<div class="row g-3 mb-4">
+    <div class="col-md-2">
+        <div class="summary-card">
+            <div class="value">{{ rot.total_passageiros or 0 }}</div>
+            <div class="label">Passageiros</div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="summary-card">
+            <div class="value">{{ rot.total_paradas or 0 }}</div>
+            <div class="label">Paradas</div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="summary-card">
+            <div class="value">{{ rot.total_rotas or 0 }}</div>
+            <div class="label">Veículos</div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="summary-card">
+            <div class="value">{{ '%.1f'|format(rot.distancia_total_km) if rot.distancia_total_km else '-' }}</div>
+            <div class="label">Km Total</div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="summary-card">
+            <div class="value">{{ rot.duracao_total_minutos or '-' }}</div>
+            <div class="label">Min. Maior Rota</div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="summary-card">
+            <div class="value">{{ rot.horario_chegada.strftime('%H:%M') }}</div>
+            <div class="label">Chegada Destino</div>
+        </div>
+    </div>
+</div>
+
+<!-- Parâmetros utilizados -->
+<div class="card mb-4">
+    <div class="card-header"><h5 class="mb-0"><i class="bi bi-sliders"></i> Parâmetros Utilizados</h5></div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4"><strong>Destino:</strong> {{ rot.destino_endereco }}</div>
+            <div class="col-md-2"><strong>Caminhada Máx.:</strong> {{ rot.distancia_maxima_caminhada }}m</div>
+            <div class="col-md-2"><strong>Tempo Máx.:</strong> {{ rot.tempo_maximo_viagem }} min</div>
+            <div class="col-md-2"><strong>Capacidade:</strong> {{ rot.capacidade_veiculo }} lug.</div>
+            <div class="col-md-2"><strong>Chegada:</strong> {{ rot.horario_chegada.strftime('%H:%M') }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Mapa -->
+<div class="card mb-4">
+    <div class="card-header"><h5 class="mb-0"><i class="bi bi-geo-alt"></i> Mapa da Rota</h5></div>
+    <div class="card-body p-0">
+        <div id="mapRelatorio"></div>
+    </div>
+</div>
+
+<!-- Detalhamento por Rota -->
+{% for roteiro in roteiros %}
+<div class="card mb-4">
+    <div class="card-header bg-dark text-white">
+        <div class="d-flex justify-content-between">
+            <h5 class="mb-0"><i class="bi bi-signpost-split"></i> {{ roteiro.nome }}</h5>
+            <div>
+                <span class="badge bg-light text-dark">{{ roteiro.distancia_km or '-' }} km</span>
+                <span class="badge bg-light text-dark">{{ roteiro.duracao_minutos or '-' }} min</span>
+                <span class="badge bg-light text-dark">{{ roteiro.total_passageiros or 0 }} passageiros</span>
+                {% if roteiro.horario_saida %}
+                <span class="badge bg-warning text-dark">Saída: {{ roteiro.horario_saida.strftime('%H:%M') }}</span>
+                {% endif %}
+                {% set ns = namespace(veiculo_recomendado=none) %}
+                {% for tv in tipos_veiculo %}
+                    {% if not ns.veiculo_recomendado and tv.capacidade >= (roteiro.total_passageiros or 0) %}
+                        {% set ns.veiculo_recomendado = tv %}
+                    {% endif %}
+                {% endfor %}
+                {% if ns.veiculo_recomendado %}
+                <span class="badge bg-info text-dark"><i class="bi bi-truck"></i> {{ ns.veiculo_recomendado.nome }} ({{ ns.veiculo_recomendado.capacidade }} lug.)</span>
+                {% elif tipos_veiculo %}
+                <span class="badge bg-danger"><i class="bi bi-exclamation-triangle"></i> Excede capacidade</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <!-- Sequência de Paradas -->
+        <h6 class="mb-3"><i class="bi bi-list-ol"></i> Sequência de Paradas</h6>
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th class="text-center" style="width: 50px;">#</th>
+                        <th>Parada</th>
+                        <th>Endereço de Referência</th>
+                        <th class="text-center">Chegada</th>
+                        <th class="text-center">Partida</th>
+                        <th class="text-center">Passageiros</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set route_paradas = [] %}
+                    {% for p in paradas %}
+                        {% if p.roteiro_id == roteiro.id %}
+                    <tr>
+                        <td class="text-center"><span class="badge bg-primary">{{ p.ordem }}</span></td>
+                        <td><strong>{{ p.nome }}</strong></td>
+                        <td>{{ p.endereco_referencia or '-' }}</td>
+                        <td class="text-center">{{ p.horario_chegada.strftime('%H:%M') if p.horario_chegada else '-' }}</td>
+                        <td class="text-center">{{ p.horario_partida.strftime('%H:%M') if p.horario_partida else '-' }}</td>
+                        <td class="text-center"><span class="badge bg-secondary">{{ p.total_passageiros }}</span></td>
+                    </tr>
+                        {% endif %}
+                    {% endfor %}
+                    <tr class="table-success">
+                        <td class="text-center"><i class="bi bi-flag-fill text-danger"></i></td>
+                        <td colspan="2"><strong>DESTINO: {{ rot.destino_endereco }}</strong></td>
+                        <td class="text-center"><strong>{{ rot.horario_chegada.strftime('%H:%M') }}</strong></td>
+                        <td class="text-center">-</td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<!-- Lista Completa de Passageiros -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-people"></i> Lista de Passageiros</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>Nome</th>
+                    <th>Endereço</th>
+                    <th>Bairro</th>
+                    <th>Parada Atribuída</th>
+                    <th class="text-center">Dist. Caminhada</th>
+                    <th class="text-center">Horário Parada</th>
+                    <th class="text-center">Tempo no Veículo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in passageiros %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td><strong>{{ p.nome }}</strong></td>
+                    <td class="text-truncate" style="max-width: 200px;">{{ p.endereco_completo() or '-' }}</td>
+                    <td>{{ p.bairro or '-' }}</td>
+                    <td>{{ p.parada.nome if p.parada else '-' }}</td>
+                    <td class="text-center">
+                        {% if p.distancia_ate_parada %}
+                            <span class="badge {% if p.distancia_ate_parada <= 200 %}bg-success{% elif p.distancia_ate_parada <= 400 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                                {{ '%.0f'|format(p.distancia_ate_parada) }}m
+                            </span>
+                        {% else %}-{% endif %}
+                    </td>
+                    <td class="text-center">
+                        {{ p.parada.horario_chegada.strftime('%H:%M') if p.parada and p.parada.horario_chegada else '-' }}
+                    </td>
+                    <td class="text-center">
+                        {% if p.tempo_no_veiculo %}
+                            <span class="badge {% if p.tempo_no_veiculo <= 45 %}bg-success{% elif p.tempo_no_veiculo <= 75 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                                {{ p.tempo_no_veiculo }} min
+                            </span>
+                        {% else %}-{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Rodapé -->
+<div class="text-center text-muted mb-4">
+    <small>
+        Relatório gerado em {{ now.strftime('%d/%m/%Y %H:%M') }} |
+        Roteirizador Inteligente - Rouxinol Fretamento e Transporte de Pessoal
+    </small>
+</div>
+
+<div class="no-print mb-4">
+    <a href="{{ url_for('roteirizador.visualizar', id=rot.id) }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://maps.googleapis.com/maps/api/js?key={{ api_key }}&libraries=geometry&callback=initMapRelatorio" async defer></script>
+<script>
+var ROUTE_COLORS = ['#E82000', '#0d6efd', '#198754', '#6f42c1', '#fd7e14', '#dc3545'];
+
+function personIconRel(color) {
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="-2 -2 20 20">' +
+        '<circle cx="8" cy="8" r="9" fill="' + color + '" stroke="white" stroke-width="1.5"/>' +
+        '<path d="M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H3zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" fill="white"/>' +
+        '</svg>';
+    return { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg), scaledSize: new google.maps.Size(24, 24), anchor: new google.maps.Point(12, 12) };
+}
+
+function stopIconRel(color, numero) {
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="44" viewBox="0 0 36 44">' +
+        '<path d="M18 44 C18 44 36 26 36 18 C36 8 28 0 18 0 C8 0 0 8 0 18 C0 26 18 44 18 44Z" fill="' + color + '" stroke="white" stroke-width="2"/>' +
+        '<circle cx="18" cy="18" r="12" fill="white" opacity="0.9"/>' +
+        '<text x="18" y="23" text-anchor="middle" font-size="14" font-weight="bold" fill="' + color + '">' + numero + '</text>' +
+        '</svg>';
+    return { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg), scaledSize: new google.maps.Size(28, 36), anchor: new google.maps.Point(14, 36) };
+}
+
+var relPassageiros = [
+    {% for p in passageiros %}{% if p.lat and p.lng %}
+    { lat: {{ p.lat }}, lng: {{ p.lng }}, nome: {{ p.nome|tojson }}, endereco: {{ (p.endereco_formatado or p.endereco or '-')|tojson }}, bairro: {{ (p.bairro or '')|tojson }}, cidade: {{ (p.cidade or '')|tojson }}, telefone: {{ (p.telefone or '')|tojson }}, roteiroId: {{ p.parada.roteiro_id if p.parada and p.parada.roteiro_id else 'null' }}, parada: {{ (p.parada.nome if p.parada else '-')|tojson }}, distCaminhada: {{ p.distancia_ate_parada|default(0, true) }}, tempoVeiculo: {{ p.tempo_no_veiculo|default(0, true) }} },
+    {% endif %}{% endfor %}
+];
+var relRoteiros = [
+    {% for r in roteiros %}
+    { id: {{ r.id }}, nome: {{ r.nome|tojson }} },
+    {% endfor %}
+];
+var relParadas = [
+    {% for p in paradas %}
+    { lat: {{ p.lat }}, lng: {{ p.lng }}, nome: {{ p.nome|tojson }}, ordem: {{ p.ordem|default(0, true)|tojson }}, roteiroId: {{ p.roteiro_id|default('null', true) }} },
+    {% endfor %}
+];
+var relPolylines = [
+    {% for r in roteiros %}{% if r.polyline_encoded %}
+    { id: {{ r.id }}, encoded: {{ r.polyline_encoded|tojson }} },
+    {% endif %}{% endfor %}
+];
+
+function initMapRelatorio() {
+    var destino = { lat: {{ rot.destino_lat|default(-19.92, true) }}, lng: {{ rot.destino_lng|default(-43.94, true) }} };
+    var map = new google.maps.Map(document.getElementById('mapRelatorio'), {
+        zoom: 12, center: destino, mapTypeControl: false, streetViewControl: false
+    });
+    var bounds = new google.maps.LatLngBounds();
+    bounds.extend(destino);
+
+    // Mapa de roteiro ID -> cor da rota
+    var roteiroColorMap = {};
+    relRoteiros.forEach(function(r, idx) {
+        roteiroColorMap[r.id] = ROUTE_COLORS[idx % ROUTE_COLORS.length];
+    });
+
+    var destinoSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="48" viewBox="0 0 40 48">' +
+        '<path d="M20 48 C20 48 40 30 40 20 C40 9 31 0 20 0 C9 0 0 9 0 20 C0 30 20 48 20 48Z" fill="#dc3545" stroke="white" stroke-width="2"/>' +
+        '<rect x="11" y="9" width="18" height="22" rx="1" fill="white"/>' +
+        '<rect x="14" y="12" width="4" height="4" rx="0.5" fill="#dc3545"/>' +
+        '<rect x="22" y="12" width="4" height="4" rx="0.5" fill="#dc3545"/>' +
+        '<rect x="14" y="19" width="4" height="4" rx="0.5" fill="#dc3545"/>' +
+        '<rect x="22" y="19" width="4" height="4" rx="0.5" fill="#dc3545"/>' +
+        '<rect x="17" y="25" width="6" height="6" fill="#dc3545"/>' +
+        '</svg>';
+    new google.maps.Marker({
+        position: destino, map: map,
+        icon: { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(destinoSvg), scaledSize: new google.maps.Size(32, 40), anchor: new google.maps.Point(16, 40) },
+        title: 'Destino'
+    });
+
+    // Passageiros - cor igual à linha da rota, com InfoWindow
+    relPassageiros.forEach(function(p) {
+        var color = (p.roteiroId && roteiroColorMap[p.roteiroId]) ? roteiroColorMap[p.roteiroId] : '#6c757d';
+        var marker = new google.maps.Marker({ position: { lat: p.lat, lng: p.lng }, map: map, icon: personIconRel(color), title: p.nome, zIndex: 10 });
+        var info = '<div style="min-width:180px"><strong>' + p.nome + '</strong><br><small>' + p.endereco + '</small>';
+        if (p.bairro) info += '<br><small>' + p.bairro + (p.cidade ? ' - ' + p.cidade : '') + '</small>';
+        if (p.telefone) info += '<br><small>Tel: ' + p.telefone + '</small>';
+        info += '<hr style="margin:4px 0"><small><b>Parada:</b> ' + p.parada + '</small><br>';
+        info += '<small><b>Caminhada:</b> ' + Math.round(p.distCaminhada) + 'm</small>';
+        if (p.tempoVeiculo > 0) info += '<br><small><b>No veículo:</b> ' + p.tempoVeiculo + ' min</small>';
+        info += '</div>';
+        var iw = new google.maps.InfoWindow({ content: info });
+        marker.addListener('click', function() { iw.open(map, marker); });
+        bounds.extend({ lat: p.lat, lng: p.lng });
+    });
+
+    relParadas.forEach(function(p) {
+        var color = (p.roteiroId && roteiroColorMap[p.roteiroId]) ? roteiroColorMap[p.roteiroId] : '#6c757d';
+        new google.maps.Marker({
+            position: { lat: p.lat, lng: p.lng }, map: map,
+            icon: stopIconRel(color, p.ordem),
+            title: p.nome, zIndex: 100
+        });
+        bounds.extend({ lat: p.lat, lng: p.lng });
+    });
+
+    relPolylines.forEach(function(rp, idx) {
+        try {
+            new google.maps.Polyline({
+                path: google.maps.geometry.encoding.decodePath(rp.encoded),
+                geodesic: true, strokeColor: ROUTE_COLORS[idx % ROUTE_COLORS.length], strokeOpacity: 0.85, strokeWeight: 5, map: map
+            });
+        } catch(e) { console.error('Erro polyline:', e); }
+    });
+
+    map.fitBounds(bounds, 50);
+}
+</script>
+{% endblock %}

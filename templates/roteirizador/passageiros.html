@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+{% block title %}Passageiros - {{ rot.nome }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('roteirizador.lista') }}">Roteirizador</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('roteirizador.visualizar', id=rot.id) }}">{{ rot.nome }}</a></li>
+            <li class="breadcrumb-item active">Passageiros</li>
+        </ol>
+    </nav>
+    <div class="d-flex justify-content-between align-items-center">
+        <h2><i class="bi bi-people"></i> Passageiros — {{ rot.nome }}</h2>
+        <span class="badge bg-primary fs-6">{{ passageiros|length }} passageiros</span>
+    </div>
+</div>
+
+<!-- Legenda de status -->
+<div class="mb-3">
+    <span class="badge bg-success me-1"><i class="bi bi-check"></i> Sucesso</span>
+    <span class="badge bg-info me-1"><i class="bi bi-hand-index"></i> Manual</span>
+    <span class="badge bg-warning text-dark me-1"><i class="bi bi-clock"></i> Pendente</span>
+    <span class="badge bg-danger me-1"><i class="bi bi-x"></i> Falha</span>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" id="tblPassageiros">
+            <thead class="table-dark">
+                <tr>
+                    <th>#</th>
+                    <th>Nome</th>
+                    <th>Endereço</th>
+                    <th>Bairro</th>
+                    <th>Cidade</th>
+                    <th class="text-center">Geocode</th>
+                    <th>Parada</th>
+                    <th class="text-center">Dist. Caminhada</th>
+                    <th class="text-center">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in passageiros %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td><strong>{{ p.nome }}</strong></td>
+                    <td class="text-truncate" style="max-width: 200px;" title="{{ p.endereco_completo() }}">
+                        {{ p.endereco_completo() or '-' }}
+                    </td>
+                    <td>{{ p.bairro or '-' }}</td>
+                    <td>{{ p.cidade or '-' }}</td>
+                    <td class="text-center">
+                        {% if p.geocode_status == 'sucesso' %}
+                            <span class="badge bg-success"><i class="bi bi-check"></i></span>
+                        {% elif p.geocode_status == 'manual' %}
+                            <span class="badge bg-info"><i class="bi bi-hand-index"></i></span>
+                        {% elif p.geocode_status == 'pendente' %}
+                            <span class="badge bg-warning text-dark"><i class="bi bi-clock"></i></span>
+                        {% else %}
+                            <span class="badge bg-danger"><i class="bi bi-x"></i></span>
+                        {% endif %}
+                    </td>
+                    <td>{{ p.parada.nome if p.parada else '-' }}</td>
+                    <td class="text-center">
+                        {% if p.distancia_ate_parada %}
+                            {{ '%.0f'|format(p.distancia_ate_parada) }}m
+                        {% else %}-{% endif %}
+                    </td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal"
+                                onclick="preencherModal({{ p.id }}, '{{ p.nome|replace("'", "") }}', {{ p.lat or 'null' }}, {{ p.lng or 'null' }}, '{{ p.endereco_completo()|replace("'", "") }}')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="mt-3">
+    <a href="{{ url_for('roteirizador.visualizar', id=rot.id) }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<!-- Modal de edição -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="editForm">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-pencil"></i> Editar Coordenadas</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong id="editNome"></strong></p>
+                    <div class="mb-3">
+                        <label class="form-label">Endereço</label>
+                        <input type="text" name="endereco" id="editEndereco" class="form-control">
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Latitude</label>
+                            <input type="number" name="lat" id="editLat" class="form-control" step="any" required>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Longitude</label>
+                            <input type="number" name="lng" id="editLng" class="form-control" step="any" required>
+                        </div>
+                    </div>
+                    <small class="text-muted">Dica: Encontre as coordenadas no Google Maps clicando com o botão direito no local desejado.</small>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function preencherModal(id, nome, lat, lng, endereco) {
+    document.getElementById('editForm').action = '{{ url_for("roteirizador.visualizar", id=rot.id) }}' .replace('{{ rot.id }}', '{{ rot.id }}') + '/passageiro/' + id + '/editar';
+    // Fix action URL
+    document.getElementById('editForm').action = '/roteirizador/{{ rot.id }}/passageiro/' + id + '/editar';
+    document.getElementById('editNome').textContent = nome;
+    document.getElementById('editLat').value = lat || '';
+    document.getElementById('editLng').value = lng || '';
+    document.getElementById('editEndereco').value = endereco || '';
+}
+</script>
+{% endblock %}

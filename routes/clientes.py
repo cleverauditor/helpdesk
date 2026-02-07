@@ -56,6 +56,7 @@ def criar():
         endereco = request.form.get('endereco', '').strip()
         cidade = request.form.get('cidade', '').strip()
         estado = request.form.get('estado', '').strip().upper()
+        cep = request.form.get('cep', '').strip()
         telefone = request.form.get('telefone', '').strip()
         email = request.form.get('email', '').strip()
         contato = request.form.get('contato', '').strip()
@@ -77,6 +78,7 @@ def criar():
             endereco=endereco,
             cidade=cidade,
             estado=estado,
+            cep=cep,
             telefone=telefone,
             email=email,
             contato=contato,
@@ -104,6 +106,7 @@ def editar(id):
         cliente.endereco = request.form.get('endereco', '').strip()
         cliente.cidade = request.form.get('cidade', '').strip()
         cliente.estado = request.form.get('estado', '').strip().upper()
+        cliente.cep = request.form.get('cep', '').strip()
         cliente.telefone = request.form.get('telefone', '').strip()
         cliente.email = request.form.get('email', '').strip()
         cliente.contato = request.form.get('contato', '').strip()

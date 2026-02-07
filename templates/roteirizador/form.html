@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+{% block title %}Nova Roteirização{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('roteirizador.lista') }}">Roteirizador</a></li>
+            <li class="breadcrumb-item active">Nova Roteirização</li>
+        </ol>
+    </nav>
+    <h2><i class="bi bi-plus-circle"></i> Nova Roteirização</h2>
+</div>
+
+<form method="POST" enctype="multipart/form-data">
+    <div class="row">
+        <!-- Formulário Principal -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header"><h5 class="mb-0"><i class="bi bi-info-circle"></i> Informações Básicas</h5></div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nome da Roteirização <span class="text-danger">*</span></label>
+                        <input type="text" name="nome" class="form-control" placeholder="Ex: Rota Manhã - Empresa ABC" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Cliente</label>
+                        <select name="cliente_id" class="form-select">
+                            <option value="">Selecione (opcional)</option>
+                            {% for c in clientes %}
+                            <option value="{{ c.id }}">{{ c.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Endereço de Destino <span class="text-danger">*</span></label>
+                        <input type="text" name="destino_endereco" class="form-control" placeholder="Ex: Rua José Otaviano Camargos, 30, Belo Horizonte, MG" required>
+                        <small class="text-muted">Endereço completo do local de trabalho/destino dos passageiros</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header"><h5 class="mb-0"><i class="bi bi-sliders"></i> Parâmetros da Rota</h5></div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Horário de Chegada <span class="text-danger">*</span></label>
+                            <input type="time" name="horario_chegada" class="form-control" value="07:00" required>
+                            <small class="text-muted">Horário previsto de chegada no destino</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Capacidade do Veículo</label>
+                            <input type="number" name="capacidade_veiculo" class="form-control" value="44" min="1" max="100">
+                            <small class="text-muted">Lotação máxima do ônibus</small>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Distância Máx. Caminhada (metros)</label>
+                            <input type="number" name="distancia_maxima_caminhada" class="form-control" value="300" min="50" max="2000" step="50">
+                            <small class="text-muted">Distância máxima que o passageiro caminha até a parada</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Tempo Máx. de Viagem (minutos)</label>
+                            <input type="number" name="tempo_maximo_viagem" class="form-control" value="90" min="15" max="300">
+                            <small class="text-muted">Duração máxima total do trajeto</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header"><h5 class="mb-0"><i class="bi bi-file-earmark-arrow-up"></i> Importar Passageiros</h5></div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Arquivo CSV ou Excel</label>
+                        <input type="file" name="arquivo" class="form-control" accept=".csv,.xlsx,.xls">
+                        <small class="text-muted">Formatos aceitos: CSV, XLSX, XLS</small>
+                    </div>
+                    <div class="alert alert-info mb-0">
+                        <h6><i class="bi bi-lightbulb"></i> Formato esperado do arquivo:</h6>
+                        <p class="mb-1">O arquivo deve conter pelo menos a coluna <strong>nome</strong>. Colunas opcionais:</p>
+                        <code>nome; endereco; numero; bairro; cidade; estado; cep; telefone</code>
+                        <p class="mt-1 mb-0"><small>O sistema aceita variações nos nomes das colunas (rua, logradouro, uf, etc.)</small></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-md-4">
+            <div class="card mb-4 border-success">
+                <div class="card-header bg-success text-white"><h5 class="mb-0"><i class="bi bi-rocket-takeoff"></i> Como funciona</h5></div>
+                <div class="card-body">
+                    <div class="d-flex align-items-start mb-3">
+                        <span class="badge bg-primary rounded-pill me-2">1</span>
+                        <div><strong>Importar</strong><br><small class="text-muted">Faça upload do arquivo com endereços dos passageiros</small></div>
+                    </div>
+                    <div class="d-flex align-items-start mb-3">
+                        <span class="badge bg-primary rounded-pill me-2">2</span>
+                        <div><strong>Geocodificar</strong><br><small class="text-muted">Os endereços serão convertidos em coordenadas via Google Maps</small></div>
+                    </div>
+                    <div class="d-flex align-items-start mb-3">
+                        <span class="badge bg-primary rounded-pill me-2">3</span>
+                        <div><strong>Clusterizar</strong><br><small class="text-muted">Passageiros próximos serão agrupados em pontos de parada</small></div>
+                    </div>
+                    <div class="d-flex align-items-start mb-3">
+                        <span class="badge bg-primary rounded-pill me-2">4</span>
+                        <div><strong>Otimizar</strong><br><small class="text-muted">A melhor rota e horários serão calculados automaticamente</small></div>
+                    </div>
+                    <div class="d-flex align-items-start">
+                        <span class="badge bg-primary rounded-pill me-2">5</span>
+                        <div><strong>Exportar</strong><br><small class="text-muted">Exporte KML, relatórios CSV e visualize no mapa</small></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-success btn-lg">
+                    <i class="bi bi-upload"></i> Importar Endereços
+                </button>
+                <a href="{{ url_for('roteirizador.lista') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Voltar
+                </a>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+
+{% block title %}Tipos de Veículo - Sistemas MaxVia{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-truck"></i> Tipos de Veículo</h2>
+    <a href="{{ url_for('veiculos.criar') }}" class="btn btn-success">
+        <i class="bi bi-plus-lg"></i> Novo Tipo
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Capacidade</th>
+                        <th>Descrição</th>
+                        <th>Status</th>
+                        <th style="width: 120px;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in veiculos %}
+                    <tr>
+                        <td><strong>{{ v.nome }}</strong></td>
+                        <td><span class="badge bg-primary">{{ v.capacidade }} lugares</span></td>
+                        <td class="text-muted">{{ v.descricao or '-' }}</td>
+                        <td>
+                            {% if v.ativo %}
+                            <span class="badge bg-success">Ativo</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Inativo</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('veiculos.editar', id=v.id) }}" class="btn btn-sm btn-outline-primary" title="Editar">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <form method="POST" action="{{ url_for('veiculos.toggle', id=v.id) }}" class="d-inline">
+                                {% if v.ativo %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Desativar">
+                                    <i class="bi bi-x-circle"></i>
+                                </button>
+                                {% else %}
+                                <button type="submit" class="btn btn-sm btn-outline-success" title="Ativar">
+                                    <i class="bi bi-check-circle"></i>
+                                </button>
+                                {% endif %}
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-4">
+                            <p class="mt-2">Nenhum tipo de veículo cadastrado.</p>
+                            <a href="{{ url_for('veiculos.criar') }}" class="btn btn-success btn-sm">Cadastrar primeiro tipo</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -43,5 +43,10 @@ class Config:
     HORARIO_INICIO = '08:00'
     HORARIO_FIM = '17:00'
 
+    # Roteirizador
+    GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY') or 'AIzaSyC1MRxzbjolWOq2TCXbvy51VjD3HxCQa_o'
+    ALLOWED_IMPORT_EXTENSIONS = {'csv', 'xlsx', 'xls'}
+    ROTEIRIZADOR_DWELL_TIME = 60  # segundos de espera por parada
+
     # Session
     PERMANENT_SESSION_LIFETIME = timedelta(hours=8)

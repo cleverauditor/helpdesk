@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ 'Editar' if veiculo else 'Novo' }} Tipo de Veículo - Sistemas MaxVia{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>
+        <i class="bi bi-truck"></i>
+        {{ 'Editar: ' + veiculo.nome if veiculo else 'Novo Tipo de Veículo' }}
+    </h2>
+    <a href="{{ url_for('veiculos.lista') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-pencil"></i> Dados do Veículo
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Nome *</label>
+                        <input type="text" name="nome" class="form-control" required
+                               value="{{ veiculo.nome if veiculo and veiculo.nome else '' }}"
+                               placeholder="Ex: Van, Micro-ônibus, Ônibus">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Capacidade (passageiros) *</label>
+                        <input type="number" name="capacidade" class="form-control" required min="1"
+                               value="{{ veiculo.capacidade if veiculo else '' }}"
+                               placeholder="Ex: 15, 25, 46">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Descrição</label>
+                        <input type="text" name="descricao" class="form-control"
+                               value="{{ veiculo.descricao if veiculo and veiculo.descricao else '' }}"
+                               placeholder="Ex: Van Sprinter, Micro Volare, Ônibus Rodoviário">
+                    </div>
+
+                    {% if veiculo %}
+                    <div class="mb-3">
+                        <label class="form-label">Status</label>
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="ativo" value="1"
+                                   {{ 'checked' if veiculo.ativo }}>
+                            <label class="form-check-label">Ativo</label>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> {{ 'Salvar Alterações' if veiculo else 'Cadastrar Tipo' }}
+                        </button>
+                        <a href="{{ url_for('veiculos.lista') }}" class="btn btn-outline-secondary">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Informações
+            </div>
+            <div class="card-body small text-muted">
+                <p>Cadastre os tipos de veículo disponíveis na frota com suas respectivas capacidades.</p>
+                <p class="mb-0">O sistema usará esses dados para recomendar o veículo adequado em cada rota da roteirização, com base na quantidade de passageiros.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

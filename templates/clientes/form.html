@@ -26,7 +26,7 @@
                             <div class="mb-3">
                                 <label class="form-label">Nome Fantasia *</label>
                                 <input type="text" name="nome" class="form-control" required
-                                       value="{{ cliente.nome if cliente else '' }}"
+                                       value="{{ cliente.nome if cliente and cliente.nome else '' }}"
                                        placeholder="Nome do cliente/empresa">
                             </div>
                         </div>
@@ -34,7 +34,7 @@
                             <div class="mb-3">
                                 <label class="form-label">Razão Social</label>
                                 <input type="text" name="razao_social" class="form-control"
-                                       value="{{ cliente.razao_social if cliente else '' }}"
+                                       value="{{ cliente.razao_social if cliente and cliente.razao_social else '' }}"
                                        placeholder="Razão social completa">
                             </div>
                         </div>
@@ -45,7 +45,7 @@
                             <div class="mb-3">
                                 <label class="form-label">CNPJ</label>
                                 <input type="text" name="cnpj" class="form-control"
-                                       value="{{ cliente.cnpj if cliente else '' }}"
+                                       value="{{ cliente.cnpj if cliente and cliente.cnpj else '' }}"
                                        placeholder="00.000.000/0000-00">
                             </div>
                         </div>
@@ -53,7 +53,7 @@
                             <div class="mb-3">
                                 <label class="form-label">Telefone</label>
                                 <input type="text" name="telefone" class="form-control"
-                                       value="{{ cliente.telefone if cliente else '' }}"
+                                       value="{{ cliente.telefone if cliente and cliente.telefone else '' }}"
                                        placeholder="(00) 0000-0000">
                             </div>
                         </div>
@@ -61,7 +61,7 @@
                             <div class="mb-3">
                                 <label class="form-label">E-mail</label>
                                 <input type="email" name="email" class="form-control"
-                                       value="{{ cliente.email if cliente else '' }}"
+                                       value="{{ cliente.email if cliente and cliente.email else '' }}"
                                        placeholder="email@empresa.com">
                             </div>
                         </div>
@@ -70,16 +70,24 @@
                     <div class="mb-3">
                         <label class="form-label">Endereço</label>
                         <input type="text" name="endereco" class="form-control"
-                               value="{{ cliente.endereco if cliente else '' }}"
+                               value="{{ cliente.endereco if cliente and cliente.endereco else '' }}"
                                placeholder="Rua, número, bairro">
                     </div>
 
                     <div class="row">
-                        <div class="col-md-8">
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label class="form-label">CEP</label>
+                                <input type="text" name="cep" class="form-control"
+                                       value="{{ cliente.cep if cliente and cliente.cep else '' }}"
+                                       placeholder="00000-000">
+                            </div>
+                        </div>
+                        <div class="col-md-5">
                             <div class="mb-3">
                                 <label class="form-label">Cidade</label>
                                 <input type="text" name="cidade" class="form-control"
-                                       value="{{ cliente.cidade if cliente else '' }}"
+                                       value="{{ cliente.cidade if cliente and cliente.cidade else '' }}"
                                        placeholder="Cidade">
                             </div>
                         </div>
@@ -102,7 +110,7 @@
                             <div class="mb-3">
                                 <label class="form-label">Contato Principal</label>
                                 <input type="text" name="contato" class="form-control"
-                                       value="{{ cliente.contato if cliente else '' }}"
+                                       value="{{ cliente.contato if cliente and cliente.contato else '' }}"
                                        placeholder="Nome do contato">
                             </div>
                         </div>
@@ -123,7 +131,7 @@
                     <div class="mb-3">
                         <label class="form-label">Observações</label>
                         <textarea name="observacoes" class="form-control" rows="3"
-                                  placeholder="Observações sobre o cliente">{{ cliente.observacoes if cliente else '' }}</textarea>
+                                  placeholder="Observações sobre o cliente">{{ cliente.observacoes if cliente and cliente.observacoes else '' }}</textarea>
                     </div>
 
                     <div class="d-flex gap-2">

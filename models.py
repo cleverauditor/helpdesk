@@ -340,6 +340,7 @@ class Cliente(db.Model):
     endereco = db.Column(db.String(300))
     cidade = db.Column(db.String(100))
     estado = db.Column(db.String(2))
+    cep = db.Column(db.String(10))
     telefone = db.Column(db.String(20))
     email = db.Column(db.String(120))
     contato = db.Column(db.String(100))  # Nome do contato principal
@@ -354,6 +355,22 @@ class Cliente(db.Model):
 
     def __repr__(self):
         return f'<Cliente {self.nome}>'
+
+
+class TipoVeiculo(db.Model):
+    """Tipos de veículos com capacidade para roteirização"""
+    __tablename__ = 'tipos_veiculo'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False)
+    capacidade = db.Column(db.Integer, nullable=False)
+    descricao = db.Column(db.String(200))
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+
+    def __repr__(self):
+        return f'<TipoVeiculo {self.nome} ({self.capacidade})>'
 
 
 class TurnoPadrao(db.Model):
@@ -660,3 +677,184 @@ class IndicadorRegistro(db.Model):
 
     def __repr__(self):
         return f'<IndicadorRegistro {self.indicador.nome} - {self.mes_referencia}>'
+
+
+# ============================================
+# MODULO ROTEIRIZADOR INTELIGENTE
+# ============================================
+
+class Roteirizacao(db.Model):
+    """Sessão de planejamento de rota de fretamento"""
+    __tablename__ = 'roteirizacoes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(200), nullable=False)
+    descricao = db.Column(db.Text)
+    cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'))
+
+    # Destino
+    destino_endereco = db.Column(db.String(500), nullable=False)
+    destino_lat = db.Column(db.Float)
+    destino_lng = db.Column(db.Float)
+
+    # Parâmetros
+    distancia_maxima_caminhada = db.Column(db.Integer, default=300)
+    tempo_maximo_viagem = db.Column(db.Integer, default=90)
+    horario_chegada = db.Column(db.Time, nullable=False)
+    capacidade_veiculo = db.Column(db.Integer, default=44)
+
+    # Arquivo importado
+    arquivo_importacao = db.Column(db.String(500))
+    arquivo_importacao_nome = db.Column(db.String(255))
+
+    # Status: rascunho, geocodificado, clusterizado, otimizado, finalizado
+    status = db.Column(db.String(30), default='rascunho')
+
+    # KML gerado
+    arquivo_kml = db.Column(db.String(500))
+    arquivo_kml_nome = db.Column(db.String(255))
+
+    # Métricas resumo
+    total_passageiros = db.Column(db.Integer, default=0)
+    total_paradas = db.Column(db.Integer, default=0)
+    total_rotas = db.Column(db.Integer, default=0)
+    distancia_total_km = db.Column(db.Float)
+    duracao_total_minutos = db.Column(db.Integer)
+
+    # Auditoria
+    usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+
+    # Relacionamentos
+    passageiros = db.relationship('Passageiro', backref='roteirizacao', lazy='dynamic',
+                                  cascade='all, delete-orphan')
+    paradas = db.relationship('PontoParada', backref='roteirizacao', lazy='dynamic',
+                              cascade='all, delete-orphan')
+    roteiros = db.relationship('RoteiroPlanejado', backref='roteirizacao', lazy='dynamic',
+                               cascade='all, delete-orphan')
+    usuario = db.relationship('User', backref='roteirizacoes')
+    cliente = db.relationship('Cliente', backref='roteirizacoes')
+
+    def __repr__(self):
+        return f'<Roteirizacao {self.id} - {self.nome}>'
+
+
+class Passageiro(db.Model):
+    """Passageiro com endereço e coordenadas geocodificadas"""
+    __tablename__ = 'passageiros'
+
+    id = db.Column(db.Integer, primary_key=True)
+    roteirizacao_id = db.Column(db.Integer, db.ForeignKey('roteirizacoes.id'), nullable=False)
+
+    nome = db.Column(db.String(200), nullable=False)
+    endereco = db.Column(db.String(500))
+    numero = db.Column(db.String(20))
+    bairro = db.Column(db.String(100))
+    cidade = db.Column(db.String(100))
+    estado = db.Column(db.String(2))
+    cep = db.Column(db.String(10))
+    complemento = db.Column(db.String(200))
+    telefone = db.Column(db.String(20))
+    observacoes = db.Column(db.Text)
+
+    # Coordenadas geocodificadas
+    lat = db.Column(db.Float)
+    lng = db.Column(db.Float)
+    endereco_formatado = db.Column(db.String(500))
+    geocode_status = db.Column(db.String(30), default='pendente')
+
+    # Vinculação à parada
+    parada_id = db.Column(db.Integer, db.ForeignKey('pontos_parada.id'))
+    distancia_ate_parada = db.Column(db.Float)
+    tempo_no_veiculo = db.Column(db.Integer)
+
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+
+    def endereco_completo(self):
+        parts = []
+        if self.endereco:
+            parts.append(self.endereco)
+        if self.numero:
+            parts.append(self.numero)
+        if self.bairro:
+            parts.append(self.bairro)
+        if self.cidade:
+            parts.append(self.cidade)
+        if self.estado:
+            parts.append(self.estado)
+        if self.cep:
+            parts.append(self.cep)
+        return ', '.join(parts) if parts else ''
+
+    def __repr__(self):
+        return f'<Passageiro {self.nome}>'
+
+
+class PontoParada(db.Model):
+    """Ponto de parada gerado pelo clustering"""
+    __tablename__ = 'pontos_parada'
+
+    id = db.Column(db.Integer, primary_key=True)
+    roteirizacao_id = db.Column(db.Integer, db.ForeignKey('roteirizacoes.id'), nullable=False)
+
+    nome = db.Column(db.String(200))
+    endereco_referencia = db.Column(db.String(500))
+    lat = db.Column(db.Float, nullable=False)
+    lng = db.Column(db.Float, nullable=False)
+
+    # Posição na rota
+    roteiro_id = db.Column(db.Integer, db.ForeignKey('roteiros_planejados.id'))
+    ordem = db.Column(db.Integer)
+    horario_chegada = db.Column(db.Time)
+    horario_partida = db.Column(db.Time)
+
+    total_passageiros = db.Column(db.Integer, default=0)
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+
+    # Relacionamentos
+    passageiros = db.relationship('Passageiro', backref='parada', lazy='dynamic')
+
+    def __repr__(self):
+        return f'<PontoParada {self.nome} ({self.lat}, {self.lng})>'
+
+
+class RoteiroPlanejado(db.Model):
+    """Rota planejada de um veículo"""
+    __tablename__ = 'roteiros_planejados'
+
+    id = db.Column(db.Integer, primary_key=True)
+    roteirizacao_id = db.Column(db.Integer, db.ForeignKey('roteirizacoes.id'), nullable=False)
+
+    nome = db.Column(db.String(200))
+    ordem = db.Column(db.Integer, default=1)
+
+    # Métricas da rota
+    distancia_km = db.Column(db.Float)
+    duracao_minutos = db.Column(db.Integer)
+    polyline_encoded = db.Column(db.Text)
+
+    # Horários
+    horario_saida = db.Column(db.Time)
+    horario_chegada_destino = db.Column(db.Time)
+
+    # Capacidade
+    total_passageiros = db.Column(db.Integer, default=0)
+    capacidade_veiculo = db.Column(db.Integer)
+
+    # KML
+    arquivo_kml = db.Column(db.String(500))
+    arquivo_kml_nome = db.Column(db.String(255))
+
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+
+    # Relacionamentos
+    paradas = db.relationship('PontoParada', backref='roteiro', lazy='dynamic',
+                              order_by='PontoParada.ordem')
+
+    def __repr__(self):
+        return f'<RoteiroPlanejado {self.nome}>'

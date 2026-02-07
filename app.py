@@ -39,6 +39,8 @@ def create_app():
     from routes.auditoria import auditoria_bp
     from routes.clientes import clientes_bp
     from routes.indicadores import indicadores_bp
+    from routes.roteirizador import roteirizador_bp
+    from routes.veiculos import veiculos_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(tickets_bp)
@@ -48,6 +50,8 @@ def create_app():
     app.register_blueprint(auditoria_bp)
     app.register_blueprint(clientes_bp)
     app.register_blueprint(indicadores_bp)
+    app.register_blueprint(roteirizador_bp)
+    app.register_blueprint(veiculos_bp)
 
     # Rota raiz - Página de módulos
     @app.route('/')
@@ -122,6 +126,19 @@ def create_app():
                 'url': url_for('indicadores.painel')
             })
 
+        # Roteirizador Inteligente
+        tem_roteirizador = current_user.is_admin() or \
+            current_user.categorias.filter_by(nome='Roteirizador').first()
+
+        if tem_roteirizador:
+            modulos.append({
+                'nome': 'Roteirizador Inteligente',
+                'descricao': 'Planejamento inteligente de rotas de fretamento com otimização de paradas.',
+                'icone': 'bi-map',
+                'cor': '#20c997',
+                'url': url_for('roteirizador.lista')
+            })
+
         # Administração - admin only
         if current_user.is_admin():
             modulos.append({
@@ -189,7 +206,8 @@ def init_data():
         ('Outros', 'Outros assuntos'),
         ('Auditoria', 'Acesso ao módulo de auditoria de rotas'),
         ('Análise de Combustível', 'Acesso ao módulo de análise de combustível'),
-        ('Indicadores Diretoria', 'Acesso ao módulo de indicadores gerenciais')
+        ('Indicadores Diretoria', 'Acesso ao módulo de indicadores gerenciais'),
+        ('Roteirizador', 'Acesso ao módulo de roteirização inteligente')
     ]
     for nome, descricao in categorias_padrao:
         if not Category.query.filter_by(nome=nome).first():

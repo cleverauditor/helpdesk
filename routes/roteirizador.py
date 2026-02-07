@@ -8,7 +8,7 @@ import csv
 import io
 import json
 from functools import wraps
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
@@ -357,8 +357,14 @@ def clusterizar(id):
     # Preparar dados
     dados = [{'id': p.id, 'lat': p.lat, 'lng': p.lng} for p in passageiros]
 
+    # Calcular timestamp de partida estimado para rota-tronco (trânsito)
+    departure_ts = None
+    if rot.horario_chegada:
+        partida_estimada = datetime.combine(datetime.today(), rot.horario_chegada) - timedelta(minutes=rot.tempo_maximo_viagem or 90)
+        departure_ts = rutils._prox_dia_util_timestamp(partida_estimada.time())
+
     # Clusterizar
-    clusters = rutils.clusterizar_passageiros(dados, rot.distancia_maxima_caminhada, rot.destino_lat, rot.destino_lng)
+    clusters = rutils.clusterizar_passageiros(dados, rot.distancia_maxima_caminhada, rot.destino_lat, rot.destino_lng, departure_ts)
 
     # Criar pontos de parada
     for i, cluster in enumerate(clusters, start=1):
@@ -429,11 +435,18 @@ def otimizar(id):
 
     sub_rotas_capacidade = rutils.dividir_rotas_por_capacidade(clusters_data, rot.capacidade_veiculo)
 
+    # Calcular timestamp de partida estimado para trânsito (ida)
+    # Horário de partida ≈ horário de chegada - tempo máximo de viagem
+    departure_ts = None
+    if rot.horario_chegada:
+        partida_estimada = datetime.combine(datetime.today(), rot.horario_chegada) - timedelta(minutes=rot.tempo_maximo_viagem or 90)
+        departure_ts = rutils._prox_dia_util_timestamp(partida_estimada.time())
+
     # Para cada grupo de capacidade, otimizar e verificar tempo
     sub_rotas_finais = []
     for grupo_clusters in sub_rotas_capacidade:
         paradas_opt = [{'id': c['id'], 'lat': c['lat'], 'lng': c['lng']} for c in grupo_clusters]
-        resultado = rutils.otimizar_rota_google(paradas_opt, rot.destino_lat, rot.destino_lng)
+        resultado = rutils.otimizar_rota_google(paradas_opt, rot.destino_lat, rot.destino_lng, departure_ts)
 
         if not resultado:
             sub_rotas_finais.append((grupo_clusters, None))
@@ -442,7 +455,7 @@ def otimizar(id):
         # Dividir por tempo máximo se necessário
         sub_tempo = rutils.dividir_rotas_por_tempo(
             grupo_clusters, resultado, rot.tempo_maximo_viagem,
-            rot.destino_lat, rot.destino_lng
+            rot.destino_lat, rot.destino_lng, departure_ts
         )
         sub_rotas_finais.extend(sub_tempo)
 
@@ -689,6 +702,9 @@ def gerar_retorno(id):
 
     rot.horario_saida_retorno = horario_saida
 
+    # Calcular timestamp de partida para trânsito (volta)
+    departure_ts_volta = rutils._prox_dia_util_timestamp(horario_saida)
+
     # Limpar roteiros de volta existentes e suas paradas
     roteiros_volta = rot.roteiros.filter_by(tipo='volta').all()
     for rv in roteiros_volta:
@@ -718,7 +734,7 @@ def gerar_retorno(id):
         paradas_data = [{'id': p.id, 'lat': p.lat, 'lng': p.lng} for p in paradas_ida]
 
         # Otimizar rota de volta (destino como origem)
-        resultado = rutils.otimizar_rota_google_volta(paradas_data, rot.destino_lat, rot.destino_lng)
+        resultado = rutils.otimizar_rota_google_volta(paradas_data, rot.destino_lat, rot.destino_lng, departure_ts_volta)
 
         if not resultado:
             flash(f'Erro ao otimizar volta {r_idx}. Verifique a API.', 'danger')

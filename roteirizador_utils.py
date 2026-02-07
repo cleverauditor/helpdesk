@@ -15,7 +15,26 @@ from datetime import datetime, timedelta
 from kml_utils import haversine
 
 
+import calendar
+
 GOOGLE_MAPS_API_KEY = None  # Será setado pelo app via init_api_key()
+
+
+def _prox_dia_util_timestamp(horario):
+    """
+    Converte um datetime.time para Unix timestamp do próximo dia útil naquele horário.
+    Usado para departure_time na API Directions com trânsito realista.
+    """
+    agora = datetime.now()
+    # Montar datetime com hoje + horário desejado
+    dt = datetime.combine(agora.date(), horario)
+    # Se já passou, usar amanhã
+    if dt <= agora:
+        dt += timedelta(days=1)
+    # Avançar para dia útil (seg-sex = 0-4)
+    while dt.weekday() > 4:
+        dt += timedelta(days=1)
+    return int(dt.timestamp())
 
 
 def init_api_key(key):
@@ -320,7 +339,7 @@ def _projeto_ponto_polyline(lat, lng, polyline_points, ref_lat):
     return proj_lat, proj_lng, best_dist
 
 
-def _obter_rota_tronco(passageiros, destino_lat, destino_lng):
+def _obter_rota_tronco(passageiros, destino_lat, destino_lng, departure_timestamp=None):
     """
     Obtém a rota-tronco do Google: passageiro mais longe -> destino.
     Retorna lista de (lat, lng) da polyline decodificada, ou None se falhar.
@@ -337,11 +356,12 @@ def _obter_rota_tronco(passageiros, destino_lat, destino_lng):
         'origin': f"{farthest['lat']},{farthest['lng']}",
         'destination': f'{destino_lat},{destino_lng}',
         'mode': 'driving',
-        'departure_time': 'now',
-        'traffic_model': 'best_guess',
         'language': 'pt-BR',
         'key': GOOGLE_MAPS_API_KEY
     }
+    if departure_timestamp:
+        params['departure_time'] = departure_timestamp
+        params['traffic_model'] = 'best_guess'
 
     try:
         resp = requests.get(url, params=params, timeout=30)
@@ -355,7 +375,7 @@ def _obter_rota_tronco(passageiros, destino_lat, destino_lng):
     return None
 
 
-def clusterizar_passageiros(passageiros, raio_metros=300, destino_lat=None, destino_lng=None):
+def clusterizar_passageiros(passageiros, raio_metros=300, destino_lat=None, destino_lng=None, departure_timestamp=None):
     """
     Posiciona paradas de forma a otimizar a rota, NÃO no endereço exato do passageiro.
     Cada passageiro caminha até raio_metros para uma parada na rota principal.
@@ -377,7 +397,7 @@ def clusterizar_passageiros(passageiros, raio_metros=300, destino_lat=None, dest
                 for p in passageiros]
 
     # Passo 1: Obter rota-tronco
-    trunk_points = _obter_rota_tronco(passageiros, destino_lat, destino_lng)
+    trunk_points = _obter_rota_tronco(passageiros, destino_lat, destino_lng, departure_timestamp)
 
     if not trunk_points or len(trunk_points) < 2:
         # Fallback: sem rota-tronco, mover cada parada em direção ao destino
@@ -544,7 +564,7 @@ def dividir_rotas_por_capacidade(clusters, capacidade):
     return rotas
 
 
-def dividir_rotas_por_tempo(grupo_clusters, resultado_otimizacao, tempo_max_min, destino_lat, destino_lng):
+def dividir_rotas_por_tempo(grupo_clusters, resultado_otimizacao, tempo_max_min, destino_lat, destino_lng, departure_timestamp=None):
     """
     Após otimização, verifica se a duração excede o tempo máximo.
     Se sim, divide as paradas em sub-grupos e re-otimiza cada um.
@@ -577,10 +597,10 @@ def dividir_rotas_por_tempo(grupo_clusters, resultado_otimizacao, tempo_max_min,
         if not g:
             continue
         paradas_opt = [{'id': c['id'], 'lat': c['lat'], 'lng': c['lng']} for c in g]
-        res = otimizar_rota_google(paradas_opt, destino_lat, destino_lng)
+        res = otimizar_rota_google(paradas_opt, destino_lat, destino_lng, departure_timestamp)
         if res:
             # Recursivamente verificar se sub-rota ainda excede tempo
-            sub = dividir_rotas_por_tempo(g, res, tempo_max_min, destino_lat, destino_lng)
+            sub = dividir_rotas_por_tempo(g, res, tempo_max_min, destino_lat, destino_lng, departure_timestamp)
             resultados.extend(sub)
         else:
             resultados.append((g, None))
@@ -592,10 +612,11 @@ def dividir_rotas_por_tempo(grupo_clusters, resultado_otimizacao, tempo_max_min,
 # OTIMIZAÇÃO DE ROTA VIA GOOGLE DIRECTIONS
 # ============================================
 
-def otimizar_rota_google(paradas, destino_lat, destino_lng):
+def otimizar_rota_google(paradas, destino_lat, destino_lng, departure_timestamp=None):
     """
     Usa Google Directions API para encontrar a melhor ordem de paradas.
     paradas: lista de dicts com 'lat', 'lng', 'id'
+    departure_timestamp: Unix timestamp para trânsito (opcional)
     Retorna: dict com waypoint_order, legs, total_distance_km, total_duration_min, polyline
     """
     if not GOOGLE_MAPS_API_KEY or not paradas:
@@ -605,13 +626,13 @@ def otimizar_rota_google(paradas, destino_lat, destino_lng):
     MAX_WAYPOINTS = 23  # 25 - origin - destination
 
     if len(paradas) <= MAX_WAYPOINTS:
-        return _directions_request(paradas, destino_lat, destino_lng)
+        return _directions_request(paradas, destino_lat, destino_lng, departure_timestamp)
     else:
         # Chunking para mais de 23 paradas
-        return _directions_chunked(paradas, destino_lat, destino_lng, MAX_WAYPOINTS)
+        return _directions_chunked(paradas, destino_lat, destino_lng, MAX_WAYPOINTS, departure_timestamp)
 
 
-def _directions_request(paradas, destino_lat, destino_lng):
+def _directions_request(paradas, destino_lat, destino_lng, departure_timestamp=None):
     """Faz uma requisição à Directions API."""
     if len(paradas) == 1:
         origin = f"{paradas[0]['lat']},{paradas[0]['lng']}"
@@ -619,8 +640,6 @@ def _directions_request(paradas, destino_lat, destino_lng):
             'origin': origin,
             'destination': f'{destino_lat},{destino_lng}',
             'mode': 'driving',
-            'departure_time': 'now',
-            'traffic_model': 'best_guess',
             'language': 'pt-BR',
             'key': GOOGLE_MAPS_API_KEY
         }
@@ -642,11 +661,14 @@ def _directions_request(paradas, destino_lat, destino_lng):
             'destination': f'{destino_lat},{destino_lng}',
             'waypoints': waypoints_str,
             'mode': 'driving',
-            'departure_time': 'now',
-            'traffic_model': 'best_guess',
             'language': 'pt-BR',
             'key': GOOGLE_MAPS_API_KEY
         }
+
+    # Adicionar departure_time para considerar trânsito
+    if departure_timestamp:
+        params['departure_time'] = departure_timestamp
+        params['traffic_model'] = 'best_guess'
 
     try:
         resp = requests.get(
@@ -703,7 +725,7 @@ def _directions_request(paradas, destino_lat, destino_lng):
         return None
 
 
-def _directions_chunked(paradas, destino_lat, destino_lng, chunk_size):
+def _directions_chunked(paradas, destino_lat, destino_lng, chunk_size, departure_timestamp=None):
     """Faz múltiplas requisições para rotas com mais de 23 paradas."""
     # Primeiro, fazer uma estimativa de ordem usando distância ao destino
     paradas_sorted = sorted(paradas, key=lambda p: haversine(
@@ -722,10 +744,10 @@ def _directions_chunked(paradas, destino_lat, destino_lng, chunk_size):
         if i < len(chunks) - 1:
             # Destino intermediário = primeira parada do próximo chunk
             next_start = chunks[i + 1][0]
-            result = _directions_request(chunk, next_start['lat'], next_start['lng'])
+            result = _directions_request(chunk, next_start['lat'], next_start['lng'], departure_timestamp)
         else:
             # Último chunk: destino final
-            result = _directions_request(chunk, destino_lat, destino_lng)
+            result = _directions_request(chunk, destino_lat, destino_lng, departure_timestamp)
 
         if result:
             reordered = [chunk[j] for j in result['waypoint_order']] if result['waypoint_order'] else chunk
@@ -803,10 +825,11 @@ def calcular_tempo_veiculo(parada_ordem, horario_partida_parada, horario_chegada
 # OTIMIZAÇÃO DE VOLTA (RETORNO)
 # ============================================
 
-def otimizar_rota_google_volta(paradas, origem_lat, origem_lng):
+def otimizar_rota_google_volta(paradas, origem_lat, origem_lng, departure_timestamp=None):
     """
     Otimiza rota de VOLTA: origem é o destino (empresa), paradas são pontos de desembarque.
     origin = destino (empresa), destination = parada mais distante, waypoints = demais paradas.
+    departure_timestamp: Unix timestamp para trânsito (opcional)
     """
     if not GOOGLE_MAPS_API_KEY or not paradas:
         return None
@@ -817,8 +840,6 @@ def otimizar_rota_google_volta(paradas, origem_lat, origem_lng):
             'origin': f'{origem_lat},{origem_lng}',
             'destination': f"{paradas[0]['lat']},{paradas[0]['lng']}",
             'mode': 'driving',
-            'departure_time': 'now',
-            'traffic_model': 'best_guess',
             'language': 'pt-BR',
             'key': GOOGLE_MAPS_API_KEY
         }
@@ -839,11 +860,14 @@ def otimizar_rota_google_volta(paradas, origem_lat, origem_lng):
             'destination': f"{dest_parada['lat']},{dest_parada['lng']}",
             'waypoints': waypoints_str,
             'mode': 'driving',
-            'departure_time': 'now',
-            'traffic_model': 'best_guess',
             'language': 'pt-BR',
             'key': GOOGLE_MAPS_API_KEY
         }
+
+    # Adicionar departure_time para considerar trânsito
+    if departure_timestamp:
+        params['departure_time'] = departure_timestamp
+        params['traffic_model'] = 'best_guess'
 
     try:
         resp = requests.get(

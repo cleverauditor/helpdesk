@@ -233,6 +233,46 @@
 
     <!-- Sidebar -->
     <div class="col-md-4">
+        <!-- Detalhamento por Rota -->
+        {% if roteiros %}
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-signpost-split"></i> Rotas</h5></div>
+            <div class="list-group list-group-flush">
+                {% for r in roteiros %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="badge rounded-pill me-2" style="background-color: {{ ['#E82000','#0d6efd','#198754','#6f42c1','#fd7e14','#dc3545'][loop.index0 % 6] }};">&nbsp;&nbsp;</span>
+                            <strong>{{ r.nome }}</strong>
+                        </div>
+                    </div>
+                    <div class="mt-1 ms-4">
+                        <small class="text-muted">
+                            <i class="bi bi-speedometer2"></i> {{ r.distancia_km or '-' }} km
+                            &middot; <i class="bi bi-clock"></i> {{ r.duracao_minutos or '-' }} min
+                            &middot; <i class="bi bi-people-fill"></i> {{ r.total_passageiros or 0 }} passageiros
+                        </small>
+                        {% if r.horario_saida %}
+                        <br><small class="text-muted"><i class="bi bi-box-arrow-right"></i> Saída: <strong>{{ r.horario_saida.strftime('%H:%M') }}</strong></small>
+                        {% endif %}
+                        {% set ns = namespace(veiculo_rec=none) %}
+                        {% for tv in tipos_veiculo %}
+                            {% if not ns.veiculo_rec and tv.capacidade >= (r.total_passageiros or 0) %}
+                                {% set ns.veiculo_rec = tv %}
+                            {% endif %}
+                        {% endfor %}
+                        {% if ns.veiculo_rec %}
+                        <br><small class="text-info"><i class="bi bi-truck"></i> <strong>{{ ns.veiculo_rec.nome }}</strong> ({{ ns.veiculo_rec.capacidade }} lugares)</small>
+                        {% elif tipos_veiculo %}
+                        <br><small class="text-danger"><i class="bi bi-exclamation-triangle"></i> Excede capacidade</small>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Resumo Geral -->
         <div class="card mb-4">
             <div class="card-header"><h5 class="mb-0"><i class="bi bi-bar-chart"></i> Resumo</h5></div>
@@ -265,35 +305,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- Detalhamento por Rota -->
-        {% if roteiros %}
-        <div class="card mb-4">
-            <div class="card-header"><h5 class="mb-0"><i class="bi bi-signpost-split"></i> Rotas</h5></div>
-            <div class="list-group list-group-flush">
-                {% for r in roteiros %}
-                <div class="list-group-item">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <span class="badge rounded-pill me-2" style="background-color: {{ ['#E82000','#0d6efd','#198754','#6f42c1','#fd7e14','#dc3545'][loop.index0 % 6] }};">&nbsp;&nbsp;</span>
-                            <strong>{{ r.nome }}</strong>
-                        </div>
-                    </div>
-                    <div class="mt-1 ms-4">
-                        <small class="text-muted">
-                            <i class="bi bi-speedometer2"></i> {{ r.distancia_km or '-' }} km
-                            &middot; <i class="bi bi-clock"></i> {{ r.duracao_minutos or '-' }} min
-                            &middot; <i class="bi bi-people-fill"></i> {{ r.total_passageiros or 0 }} passageiros
-                        </small>
-                        {% if r.horario_saida %}
-                        <br><small class="text-muted"><i class="bi bi-box-arrow-right"></i> Saída: <strong>{{ r.horario_saida.strftime('%H:%M') }}</strong></small>
-                        {% endif %}
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
 
         <!-- Parâmetros -->
         <div class="card mb-4">

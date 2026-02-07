@@ -737,8 +737,40 @@ class Roteirizacao(db.Model):
     usuario = db.relationship('User', backref='roteirizacoes')
     cliente = db.relationship('Cliente', backref='roteirizacoes')
 
+    simulacoes = db.relationship('Simulacao', backref='roteirizacao', lazy='dynamic',
+                                cascade='all, delete-orphan')
+
     def __repr__(self):
         return f'<Roteirizacao {self.id} - {self.nome}>'
+
+
+class Simulacao(db.Model):
+    """Snapshot de uma simulação de roteirização para comparação"""
+    __tablename__ = 'simulacoes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    roteirizacao_id = db.Column(db.Integer, db.ForeignKey('roteirizacoes.id'), nullable=False)
+    nome = db.Column(db.String(200), nullable=False)
+
+    # Parâmetros usados
+    distancia_maxima_caminhada = db.Column(db.Integer)
+    tempo_maximo_viagem = db.Column(db.Integer)
+    horario_chegada = db.Column(db.Time)
+    capacidade_veiculo = db.Column(db.Integer)
+
+    # Métricas
+    total_rotas = db.Column(db.Integer)
+    total_paradas = db.Column(db.Integer)
+    distancia_total_km = db.Column(db.Float)
+    duracao_total_minutos = db.Column(db.Integer)
+
+    # Dados completos (rotas, paradas, atribuições)
+    dados_json = db.Column(db.Text)
+
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+
+    def __repr__(self):
+        return f'<Simulacao {self.id} - {self.nome}>'
 
 
 class Passageiro(db.Model):

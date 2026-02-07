@@ -6,6 +6,7 @@ import os
 import uuid
 import csv
 import io
+import json
 from functools import wraps
 from datetime import datetime, time
 
@@ -17,7 +18,7 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 
 from models import (
-    db, Category, Roteirizacao, Passageiro, PontoParada, RoteiroPlanejado, Cliente, TipoVeiculo
+    db, Category, Roteirizacao, Passageiro, PontoParada, RoteiroPlanejado, Cliente, TipoVeiculo, Simulacao
 )
 import roteirizador_utils as rutils
 
@@ -207,6 +208,7 @@ def visualizar(id):
 
     api_key = current_app.config['GOOGLE_MAPS_API_KEY']
     tipos_veiculo = TipoVeiculo.query.filter_by(ativo=True).order_by(TipoVeiculo.capacidade).all()
+    simulacoes = rot.simulacoes.order_by(Simulacao.criado_em.desc()).all()
 
     return render_template('roteirizador/view.html',
                            rot=rot,
@@ -217,7 +219,8 @@ def visualizar(id):
                            total_falha=total_falha,
                            total_pendente=total_pendente,
                            api_key=api_key,
-                           tipos_veiculo=tipos_veiculo)
+                           tipos_veiculo=tipos_veiculo,
+                           simulacoes=simulacoes)
 
 
 # ============================================
@@ -518,6 +521,10 @@ def otimizar(id):
 def recalcular(id):
     rot = Roteirizacao.query.get_or_404(id)
 
+    # Salvar simulação atual antes de recalcular (se já otimizado)
+    if rot.status in ('otimizado', 'finalizado') and rot.total_rotas:
+        _salvar_simulacao(rot)
+
     # Atualizar parâmetros
     dist_max = request.form.get('distancia_maxima_caminhada', type=int)
     tempo_max = request.form.get('tempo_maximo_viagem', type=int)
@@ -541,8 +548,59 @@ def recalcular(id):
     rot.status = 'geocodificado'
     db.session.commit()
 
-    flash('Parâmetros atualizados. Clusterize e otimize novamente.', 'info')
+    flash('Simulação anterior salva. Clusterize e otimize com os novos parâmetros.', 'info')
     return redirect(url_for('roteirizador.visualizar', id=id))
+
+
+def _salvar_simulacao(rot):
+    """Salva o estado atual da roteirização como simulação"""
+    num = rot.simulacoes.count() + 1
+    nome = f'Simulação {num} - {rot.distancia_maxima_caminhada}m, Cap. {rot.capacidade_veiculo}'
+
+    # Snapshot dos dados das rotas e paradas
+    roteiros = rot.roteiros.filter_by(ativo=True).order_by(RoteiroPlanejado.ordem).all()
+    paradas = rot.paradas.filter_by(ativo=True).order_by(PontoParada.roteiro_id, PontoParada.ordem).all()
+
+    dados = {
+        'roteiros': [{
+            'nome': r.nome,
+            'ordem': r.ordem,
+            'distancia_km': r.distancia_km,
+            'duracao_minutos': r.duracao_minutos,
+            'total_passageiros': r.total_passageiros,
+            'capacidade_veiculo': r.capacidade_veiculo,
+            'horario_saida': r.horario_saida.strftime('%H:%M') if r.horario_saida else None,
+            'horario_chegada_destino': r.horario_chegada_destino.strftime('%H:%M') if r.horario_chegada_destino else None,
+            'polyline_encoded': r.polyline_encoded,
+        } for r in roteiros],
+        'paradas': [{
+            'nome': p.nome,
+            'endereco_referencia': p.endereco_referencia,
+            'lat': p.lat,
+            'lng': p.lng,
+            'ordem': p.ordem,
+            'roteiro_nome': next((r.nome for r in roteiros if r.id == p.roteiro_id), None),
+            'total_passageiros': p.total_passageiros,
+            'horario_chegada': p.horario_chegada.strftime('%H:%M') if p.horario_chegada else None,
+            'horario_partida': p.horario_partida.strftime('%H:%M') if p.horario_partida else None,
+        } for p in paradas],
+    }
+
+    simulacao = Simulacao(
+        roteirizacao_id=rot.id,
+        nome=nome,
+        distancia_maxima_caminhada=rot.distancia_maxima_caminhada,
+        tempo_maximo_viagem=rot.tempo_maximo_viagem,
+        horario_chegada=rot.horario_chegada,
+        capacidade_veiculo=rot.capacidade_veiculo,
+        total_rotas=rot.total_rotas,
+        total_paradas=rot.total_paradas,
+        distancia_total_km=rot.distancia_total_km,
+        duracao_total_minutos=rot.duracao_total_minutos,
+        dados_json=json.dumps(dados, ensure_ascii=False)
+    )
+    db.session.add(simulacao)
+    db.session.flush()
 
 
 # ============================================
@@ -828,3 +886,107 @@ def excluir(id):
     db.session.commit()
     flash('Roteirização excluída.', 'success')
     return redirect(url_for('roteirizador.lista'))
+
+
+# ============================================
+# SIMULAÇÕES
+# ============================================
+
+@roteirizador_bp.route('/<int:id>/simulacoes')
+@roteirizador_required
+def simulacoes(id):
+    rot = Roteirizacao.query.get_or_404(id)
+    sims = rot.simulacoes.order_by(Simulacao.criado_em.desc()).all()
+    tipos_veiculo = TipoVeiculo.query.filter_by(ativo=True).order_by(TipoVeiculo.capacidade).all()
+    return render_template('roteirizador/simulacoes.html', rot=rot, simulacoes=sims, tipos_veiculo=tipos_veiculo)
+
+
+@roteirizador_bp.route('/<int:id>/simulacao/<int:sim_id>/aplicar', methods=['POST'])
+@roteirizador_required
+def aplicar_simulacao(id, sim_id):
+    rot = Roteirizacao.query.get_or_404(id)
+    sim = Simulacao.query.get_or_404(sim_id)
+
+    if sim.roteirizacao_id != rot.id:
+        flash('Simulação não pertence a esta roteirização.', 'danger')
+        return redirect(url_for('roteirizador.visualizar', id=id))
+
+    # Salvar estado atual antes de aplicar (se otimizado)
+    if rot.status in ('otimizado', 'finalizado') and rot.total_rotas:
+        _salvar_simulacao(rot)
+
+    # Limpar dados atuais
+    RoteiroPlanejado.query.filter_by(roteirizacao_id=id).delete()
+    for p in rot.paradas.filter_by(ativo=True).all():
+        p.roteiro_id = None
+        p.ordem = None
+        p.horario_chegada = None
+        p.horario_partida = None
+
+    # Restaurar parâmetros
+    rot.distancia_maxima_caminhada = sim.distancia_maxima_caminhada
+    rot.tempo_maximo_viagem = sim.tempo_maximo_viagem
+    rot.horario_chegada = sim.horario_chegada
+    rot.capacidade_veiculo = sim.capacidade_veiculo
+    rot.total_rotas = sim.total_rotas
+    rot.total_paradas = sim.total_paradas
+    rot.distancia_total_km = sim.distancia_total_km
+    rot.duracao_total_minutos = sim.duracao_total_minutos
+
+    # Restaurar rotas e paradas do JSON
+    dados = json.loads(sim.dados_json)
+
+    roteiro_map = {}
+    for rd in dados.get('roteiros', []):
+        roteiro = RoteiroPlanejado(
+            roteirizacao_id=id,
+            nome=rd['nome'],
+            ordem=rd['ordem'],
+            distancia_km=rd['distancia_km'],
+            duracao_minutos=rd['duracao_minutos'],
+            total_passageiros=rd['total_passageiros'],
+            capacidade_veiculo=rd['capacidade_veiculo'],
+            polyline_encoded=rd.get('polyline_encoded'),
+        )
+        if rd.get('horario_saida'):
+            h, m = rd['horario_saida'].split(':')
+            roteiro.horario_saida = time(int(h), int(m))
+        if rd.get('horario_chegada_destino'):
+            h, m = rd['horario_chegada_destino'].split(':')
+            roteiro.horario_chegada_destino = time(int(h), int(m))
+        db.session.add(roteiro)
+        db.session.flush()
+        roteiro_map[rd['nome']] = roteiro.id
+
+    # Restaurar atribuições das paradas
+    for pd in dados.get('paradas', []):
+        parada = rot.paradas.filter_by(nome=pd['nome'], lat=pd['lat'], lng=pd['lng']).first()
+        if parada and pd.get('roteiro_nome') in roteiro_map:
+            parada.roteiro_id = roteiro_map[pd['roteiro_nome']]
+            parada.ordem = pd['ordem']
+            if pd.get('horario_chegada'):
+                h, m = pd['horario_chegada'].split(':')
+                parada.horario_chegada = time(int(h), int(m))
+            if pd.get('horario_partida'):
+                h, m = pd['horario_partida'].split(':')
+                parada.horario_partida = time(int(h), int(m))
+
+    rot.status = 'otimizado'
+    db.session.commit()
+
+    flash(f'Simulação "{sim.nome}" aplicada com sucesso!', 'success')
+    return redirect(url_for('roteirizador.visualizar', id=id))
+
+
+@roteirizador_bp.route('/<int:id>/simulacao/<int:sim_id>/excluir', methods=['POST'])
+@roteirizador_required
+def excluir_simulacao(id, sim_id):
+    sim = Simulacao.query.get_or_404(sim_id)
+    if sim.roteirizacao_id != id:
+        flash('Simulação não pertence a esta roteirização.', 'danger')
+        return redirect(url_for('roteirizador.visualizar', id=id))
+
+    db.session.delete(sim)
+    db.session.commit()
+    flash(f'Simulação "{sim.nome}" excluída.', 'success')
+    return redirect(url_for('roteirizador.visualizar', id=id))

@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+
+{% block title %}Simulações - {{ rot.nome }} - Sistemas MaxVia{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2><i class="bi bi-collection"></i> Comparação de Simulações</h2>
+        <p class="text-muted mb-0">{{ rot.nome }}</p>
+    </div>
+    <a href="{{ url_for('roteirizador.visualizar', id=rot.id) }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<!-- Estado Atual -->
+{% if rot.status in ['otimizado', 'finalizado'] and rot.total_rotas %}
+<div class="card mb-4 border-primary">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-star-fill"></i> Configuração Atual</h5>
+        <span class="badge bg-light text-primary">Ativa</span>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Parâmetros</h6>
+                <table class="table table-sm">
+                    <tr><td class="text-muted">Dist. Caminhada</td><td><strong>{{ rot.distancia_maxima_caminhada }}m</strong></td></tr>
+                    <tr><td class="text-muted">Tempo Máx.</td><td><strong>{{ rot.tempo_maximo_viagem }} min</strong></td></tr>
+                    <tr><td class="text-muted">Chegada</td><td><strong>{{ rot.horario_chegada.strftime('%H:%M') }}</strong></td></tr>
+                    <tr><td class="text-muted">Capacidade</td><td><strong>{{ rot.capacidade_veiculo }} lug.</strong></td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>Resultados</h6>
+                <div class="row g-2">
+                    <div class="col-6"><div class="text-center p-2 bg-light rounded"><div class="h4 mb-0">{{ rot.total_rotas or 0 }}</div><small class="text-muted">Rotas</small></div></div>
+                    <div class="col-6"><div class="text-center p-2 bg-light rounded"><div class="h4 mb-0">{{ rot.total_paradas or 0 }}</div><small class="text-muted">Paradas</small></div></div>
+                    <div class="col-6"><div class="text-center p-2 bg-light rounded"><div class="h4 mb-0">{{ '%.1f'|format(rot.distancia_total_km) if rot.distancia_total_km else '-' }}</div><small class="text-muted">Km Total</small></div></div>
+                    <div class="col-6"><div class="text-center p-2 bg-light rounded"><div class="h4 mb-0">{{ rot.duracao_total_minutos or '-' }}</div><small class="text-muted">Min. Maior Rota</small></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Simulações Salvas -->
+{% if simulacoes %}
+<div class="card">
+    <div class="card-header"><h5 class="mb-0"><i class="bi bi-collection"></i> Simulações Salvas ({{ simulacoes|length }})</h5></div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Simulação</th>
+                    <th class="text-center">Caminhada</th>
+                    <th class="text-center">Tempo Máx.</th>
+                    <th class="text-center">Capacidade</th>
+                    <th class="text-center">Rotas</th>
+                    <th class="text-center">Paradas</th>
+                    <th class="text-center">Km Total</th>
+                    <th class="text-center">Duração</th>
+                    <th class="text-center">Data</th>
+                    <th width="120">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sim in simulacoes %}
+                <tr>
+                    <td><strong>{{ sim.nome }}</strong></td>
+                    <td class="text-center">{{ sim.distancia_maxima_caminhada }}m</td>
+                    <td class="text-center">{{ sim.tempo_maximo_viagem }} min</td>
+                    <td class="text-center">{{ sim.capacidade_veiculo }}</td>
+                    <td class="text-center"><span class="badge bg-primary">{{ sim.total_rotas or 0 }}</span></td>
+                    <td class="text-center">{{ sim.total_paradas or 0 }}</td>
+                    <td class="text-center">{{ '%.1f'|format(sim.distancia_total_km) if sim.distancia_total_km else '-' }}</td>
+                    <td class="text-center">{{ sim.duracao_total_minutos or '-' }} min</td>
+                    <td class="text-center"><small>{{ sim.criado_em.strftime('%d/%m %H:%M') }}</small></td>
+                    <td>
+                        <form method="POST" action="{{ url_for('roteirizador.aplicar_simulacao', id=rot.id, sim_id=sim.id) }}" class="d-inline">
+                            <button class="btn btn-sm btn-outline-success" title="Aplicar" onclick="return confirm('Aplicar esta simulação? O estado atual será salvo.')">
+                                <i class="bi bi-check-lg"></i>
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('roteirizador.excluir_simulacao', id=rot.id, sim_id=sim.id) }}" class="d-inline">
+                            <button class="btn btn-sm btn-outline-danger" title="Excluir" onclick="return confirm('Excluir esta simulação?')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i> Nenhuma simulação salva ainda. Ao recalcular com novos parâmetros, a configuração atual é salva automaticamente como simulação.
+</div>
+{% endif %}
+{% endblock %}

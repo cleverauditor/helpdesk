@@ -337,6 +337,8 @@ def _obter_rota_tronco(passageiros, destino_lat, destino_lng):
         'origin': f"{farthest['lat']},{farthest['lng']}",
         'destination': f'{destino_lat},{destino_lng}',
         'mode': 'driving',
+        'departure_time': 'now',
+        'traffic_model': 'best_guess',
         'language': 'pt-BR',
         'key': GOOGLE_MAPS_API_KEY
     }
@@ -617,6 +619,8 @@ def _directions_request(paradas, destino_lat, destino_lng):
             'origin': origin,
             'destination': f'{destino_lat},{destino_lng}',
             'mode': 'driving',
+            'departure_time': 'now',
+            'traffic_model': 'best_guess',
             'language': 'pt-BR',
             'key': GOOGLE_MAPS_API_KEY
         }
@@ -638,6 +642,8 @@ def _directions_request(paradas, destino_lat, destino_lng):
             'destination': f'{destino_lat},{destino_lng}',
             'waypoints': waypoints_str,
             'mode': 'driving',
+            'departure_time': 'now',
+            'traffic_model': 'best_guess',
             'language': 'pt-BR',
             'key': GOOGLE_MAPS_API_KEY
         }
@@ -659,15 +665,17 @@ def _directions_request(paradas, destino_lat, destino_lng):
         total_dur = 0
 
         for leg in route['legs']:
+            # Usar duration_in_traffic se disponível (considera trânsito)
+            duration_val = leg.get('duration_in_traffic', leg['duration'])['value']
             leg_info = {
                 'distance_m': leg['distance']['value'],
-                'duration_s': leg['duration']['value'],
+                'duration_s': duration_val,
                 'start_address': leg.get('start_address', ''),
                 'end_address': leg.get('end_address', ''),
             }
             legs.append(leg_info)
             total_dist += leg['distance']['value']
-            total_dur += leg['duration']['value']
+            total_dur += duration_val
 
         raw_wp_order = route.get('waypoint_order', list(range(len(paradas) - 1)))
 
@@ -809,6 +817,8 @@ def otimizar_rota_google_volta(paradas, origem_lat, origem_lng):
             'origin': f'{origem_lat},{origem_lng}',
             'destination': f"{paradas[0]['lat']},{paradas[0]['lng']}",
             'mode': 'driving',
+            'departure_time': 'now',
+            'traffic_model': 'best_guess',
             'language': 'pt-BR',
             'key': GOOGLE_MAPS_API_KEY
         }
@@ -829,6 +839,8 @@ def otimizar_rota_google_volta(paradas, origem_lat, origem_lng):
             'destination': f"{dest_parada['lat']},{dest_parada['lng']}",
             'waypoints': waypoints_str,
             'mode': 'driving',
+            'departure_time': 'now',
+            'traffic_model': 'best_guess',
             'language': 'pt-BR',
             'key': GOOGLE_MAPS_API_KEY
         }
@@ -850,15 +862,16 @@ def otimizar_rota_google_volta(paradas, origem_lat, origem_lng):
         total_dur = 0
 
         for leg in route['legs']:
+            duration_val = leg.get('duration_in_traffic', leg['duration'])['value']
             leg_info = {
                 'distance_m': leg['distance']['value'],
-                'duration_s': leg['duration']['value'],
+                'duration_s': duration_val,
                 'start_address': leg.get('start_address', ''),
                 'end_address': leg.get('end_address', ''),
             }
             legs.append(leg_info)
             total_dist += leg['distance']['value']
-            total_dur += leg['duration']['value']
+            total_dur += duration_val
 
         # Reconstruir ordem: primeira leg é destino→primeira parada (não conta como parada)
         # As paradas na ordem são: waypoints otimizados + destino final (farthest)

@@ -106,7 +106,7 @@
                     </div>
                     {% endif %}
                     <form method="POST" action="{{ url_for('roteirizador.clusterizar', id=rot.id) }}">
-                        <button class="btn btn-warning text-dark"><i class="bi bi-diagram-3"></i> Clusterizar Passageiros</button>
+                        <button class="btn btn-dark"><i class="bi bi-diagram-3"></i> Clusterizar Passageiros</button>
                     </form>
                 </div>
 
@@ -167,7 +167,7 @@
                         <small class="text-muted">Exporte o KML ou relatório. Para editar, reabra a roteirização.</small>
                     </div>
                     <form method="POST" action="{{ url_for('roteirizador.reabrir', id=rot.id) }}" class="ms-3">
-                        <button class="btn btn-outline-warning" onclick="return confirm('Reabrir para edição?');">
+                        <button class="btn btn-dark" onclick="return confirm('Reabrir para edição?');">
                             <i class="bi bi-arrow-counterclockwise"></i> Reabrir
                         </button>
                     </form>

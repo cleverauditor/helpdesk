@@ -792,6 +792,134 @@ def calcular_tempo_veiculo(parada_ordem, horario_partida_parada, horario_chegada
 
 
 # ============================================
+# OTIMIZAÇÃO DE VOLTA (RETORNO)
+# ============================================
+
+def otimizar_rota_google_volta(paradas, origem_lat, origem_lng):
+    """
+    Otimiza rota de VOLTA: origem é o destino (empresa), paradas são pontos de desembarque.
+    origin = destino (empresa), destination = parada mais distante, waypoints = demais paradas.
+    """
+    if not GOOGLE_MAPS_API_KEY or not paradas:
+        return None
+
+    if len(paradas) == 1:
+        # Apenas uma parada: destino → parada
+        params = {
+            'origin': f'{origem_lat},{origem_lng}',
+            'destination': f"{paradas[0]['lat']},{paradas[0]['lng']}",
+            'mode': 'driving',
+            'language': 'pt-BR',
+            'key': GOOGLE_MAPS_API_KEY
+        }
+    else:
+        # Parada mais distante = destino final (último desembarque)
+        farthest_idx = max(
+            range(len(paradas)),
+            key=lambda i: haversine(paradas[i]['lat'], paradas[i]['lng'], origem_lat, origem_lng)
+        )
+        dest_parada = paradas[farthest_idx]
+        other_paradas = [p for i, p in enumerate(paradas) if i != farthest_idx]
+
+        waypoints_str = 'optimize:true|' + '|'.join(
+            f"{p['lat']},{p['lng']}" for p in other_paradas
+        )
+        params = {
+            'origin': f'{origem_lat},{origem_lng}',
+            'destination': f"{dest_parada['lat']},{dest_parada['lng']}",
+            'waypoints': waypoints_str,
+            'mode': 'driving',
+            'language': 'pt-BR',
+            'key': GOOGLE_MAPS_API_KEY
+        }
+
+    try:
+        resp = requests.get(
+            'https://maps.googleapis.com/maps/api/directions/json',
+            params=params,
+            timeout=30
+        )
+        data = resp.json()
+
+        if data['status'] != 'OK':
+            return None
+
+        route = data['routes'][0]
+        legs = []
+        total_dist = 0
+        total_dur = 0
+
+        for leg in route['legs']:
+            leg_info = {
+                'distance_m': leg['distance']['value'],
+                'duration_s': leg['duration']['value'],
+                'start_address': leg.get('start_address', ''),
+                'end_address': leg.get('end_address', ''),
+            }
+            legs.append(leg_info)
+            total_dist += leg['distance']['value']
+            total_dur += leg['duration']['value']
+
+        # Reconstruir ordem: primeira leg é destino→primeira parada (não conta como parada)
+        # As paradas na ordem são: waypoints otimizados + destino final (farthest)
+        raw_wp_order = route.get('waypoint_order', list(range(len(paradas) - 1)))
+
+        if len(paradas) > 1:
+            farthest_idx = max(
+                range(len(paradas)),
+                key=lambda i: haversine(paradas[i]['lat'], paradas[i]['lng'], origem_lat, origem_lng)
+            )
+            other_indices = [i for i in range(len(paradas)) if i != farthest_idx]
+            # Ordem: waypoints otimizados + farthest no final
+            full_order = [other_indices[j] for j in raw_wp_order] + [farthest_idx]
+        else:
+            full_order = [0]
+
+        return {
+            'waypoint_order': full_order,
+            'legs': legs,
+            'total_distance_km': round(total_dist / 1000, 2),
+            'total_duration_min': round(total_dur / 60),
+            'polyline': route['overview_polyline']['points']
+        }
+
+    except Exception:
+        return None
+
+
+def calcular_horarios_volta(legs, horario_saida, dwell_time_seconds=60):
+    """
+    Calcula horários de cada parada PROGRESSIVAMENTE a partir do horário de saída do destino.
+    A primeira leg é destino → primeira parada. Cada leg seguinte é parada → próxima parada.
+    Retorna: lista de {'ordem': int, 'chegada': time, 'partida': time} para cada parada.
+    """
+    base = datetime(2000, 1, 1, horario_saida.hour, horario_saida.minute, horario_saida.second)
+    current_time = base  # horário de saída do destino
+
+    schedule = []
+    n_legs = len(legs)
+
+    for i in range(n_legs):
+        leg_duration = timedelta(seconds=legs[i]['duration_s'])
+        dwell = timedelta(seconds=dwell_time_seconds)
+
+        # Chegada nesta parada = tempo atual + duração da leg
+        chegada = current_time + leg_duration
+        # Partida desta parada = chegada + tempo de embarque/desembarque
+        partida = chegada + dwell
+
+        schedule.append({
+            'ordem': i,
+            'chegada': chegada.time(),
+            'partida': partida.time()
+        })
+
+        current_time = partida
+
+    return schedule
+
+
+# ============================================
 # GERAÇÃO DE KML
 # ============================================
 

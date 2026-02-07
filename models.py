@@ -714,12 +714,18 @@ class Roteirizacao(db.Model):
     arquivo_kml = db.Column(db.String(500))
     arquivo_kml_nome = db.Column(db.String(255))
 
-    # Métricas resumo
+    # Métricas resumo (ida)
     total_passageiros = db.Column(db.Integer, default=0)
     total_paradas = db.Column(db.Integer, default=0)
     total_rotas = db.Column(db.Integer, default=0)
     distancia_total_km = db.Column(db.Float)
     duracao_total_minutos = db.Column(db.Integer)
+
+    # Retorno (volta)
+    horario_saida_retorno = db.Column(db.Time)
+    total_rotas_volta = db.Column(db.Integer)
+    distancia_total_km_volta = db.Column(db.Float)
+    duracao_total_minutos_volta = db.Column(db.Integer)
 
     # Auditoria
     usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -863,6 +869,7 @@ class RoteiroPlanejado(db.Model):
 
     nome = db.Column(db.String(200))
     ordem = db.Column(db.Integer, default=1)
+    tipo = db.Column(db.String(10), default='ida')  # 'ida' ou 'volta'
 
     # Métricas da rota
     distancia_km = db.Column(db.Float)

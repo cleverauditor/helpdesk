@@ -199,7 +199,16 @@ def visualizar(id):
 
     passageiros = rot.passageiros.filter_by(ativo=True).all()
     paradas = rot.paradas.filter_by(ativo=True).order_by(PontoParada.roteiro_id, PontoParada.ordem).all()
-    roteiros = rot.roteiros.filter_by(ativo=True).order_by(RoteiroPlanejado.ordem).all()
+
+    # Separar roteiros ida e volta
+    all_roteiros = rot.roteiros.filter_by(ativo=True).order_by(RoteiroPlanejado.ordem).all()
+    roteiros = [r for r in all_roteiros if r.tipo != 'volta']
+    roteiros_volta = [r for r in all_roteiros if r.tipo == 'volta']
+
+    # Paradas da volta (vinculadas a roteiros volta)
+    volta_ids = {r.id for r in roteiros_volta}
+    paradas_volta = [p for p in paradas if p.roteiro_id in volta_ids]
+    paradas = [p for p in paradas if p.roteiro_id not in volta_ids]
 
     # Contagens de geocode
     total_geo = sum(1 for p in passageiros if p.geocode_status == 'sucesso')
@@ -215,6 +224,8 @@ def visualizar(id):
                            passageiros=passageiros,
                            paradas=paradas,
                            roteiros=roteiros,
+                           roteiros_volta=roteiros_volta,
+                           paradas_volta=paradas_volta,
                            total_geo=total_geo,
                            total_falha=total_falha,
                            total_pendente=total_pendente,
@@ -619,6 +630,127 @@ def _salvar_simulacao(rot):
 
 
 # ============================================
+# GERAR RETORNO (VOLTA)
+# ============================================
+
+@roteirizador_bp.route('/<int:id>/gerar_retorno', methods=['POST'])
+@roteirizador_required
+def gerar_retorno(id):
+    rot = Roteirizacao.query.get_or_404(id)
+    rutils.init_api_key(current_app.config['GOOGLE_MAPS_API_KEY'])
+
+    if rot.status not in ('otimizado', 'finalizado'):
+        flash('A roteirização precisa estar otimizada primeiro.', 'warning')
+        return redirect(url_for('roteirizador.visualizar', id=id))
+
+    # Obter horário de saída do retorno
+    horario_str = request.form.get('horario_saida_retorno', '')
+    if not horario_str:
+        flash('Informe o horário de saída do destino.', 'danger')
+        return redirect(url_for('roteirizador.visualizar', id=id))
+
+    try:
+        h, m = horario_str.split(':')
+        horario_saida = time(int(h), int(m))
+    except (ValueError, AttributeError):
+        flash('Horário inválido.', 'danger')
+        return redirect(url_for('roteirizador.visualizar', id=id))
+
+    rot.horario_saida_retorno = horario_saida
+
+    # Limpar roteiros de volta existentes e suas paradas
+    roteiros_volta = rot.roteiros.filter_by(tipo='volta').all()
+    for rv in roteiros_volta:
+        PontoParada.query.filter_by(roteiro_id=rv.id).delete()
+        db.session.delete(rv)
+    db.session.flush()
+
+    # Buscar roteiros de ida
+    roteiros_ida = rot.roteiros.filter_by(ativo=True, tipo='ida').order_by(RoteiroPlanejado.ordem).all()
+
+    if not roteiros_ida:
+        flash('Nenhuma rota de ida encontrada.', 'danger')
+        return redirect(url_for('roteirizador.visualizar', id=id))
+
+    total_dist_volta = 0
+    max_dur_volta = 0
+    num_volta = 0
+
+    for r_idx, roteiro_ida in enumerate(roteiros_ida, start=1):
+        # Pegar paradas da ida para este roteiro
+        paradas_ida = roteiro_ida.paradas.filter_by(ativo=True).order_by(PontoParada.ordem).all()
+
+        if not paradas_ida:
+            continue
+
+        # Preparar dados para otimização
+        paradas_data = [{'id': p.id, 'lat': p.lat, 'lng': p.lng} for p in paradas_ida]
+
+        # Otimizar rota de volta (destino como origem)
+        resultado = rutils.otimizar_rota_google_volta(paradas_data, rot.destino_lat, rot.destino_lng)
+
+        if not resultado:
+            flash(f'Erro ao otimizar volta {r_idx}. Verifique a API.', 'danger')
+            continue
+
+        # Calcular horários progressivos
+        dwell = current_app.config.get('ROTEIRIZADOR_DWELL_TIME', 60)
+        schedule = rutils.calcular_horarios_volta(resultado['legs'], horario_saida, dwell)
+
+        # Criar roteiro de volta
+        roteiro_volta = RoteiroPlanejado(
+            roteirizacao_id=id,
+            nome=f'Volta {r_idx}',
+            ordem=r_idx,
+            tipo='volta',
+            distancia_km=resultado['total_distance_km'],
+            duracao_minutos=resultado['total_duration_min'],
+            polyline_encoded=resultado['polyline'],
+            horario_saida=horario_saida,
+            horario_chegada_destino=None,
+            capacidade_veiculo=roteiro_ida.capacidade_veiculo,
+            total_passageiros=roteiro_ida.total_passageiros
+        )
+        db.session.add(roteiro_volta)
+        db.session.flush()
+
+        # Criar paradas de volta (cópias com novos horários)
+        ordem_otimizada = resultado['waypoint_order']
+
+        for seq_local, orig_idx in enumerate(ordem_otimizada):
+            if orig_idx < len(paradas_ida):
+                parada_ida = paradas_ida[orig_idx]
+                parada_volta = PontoParada(
+                    roteirizacao_id=id,
+                    roteiro_id=roteiro_volta.id,
+                    nome=f'Parada V{seq_local + 1}',
+                    endereco_referencia=parada_ida.endereco_referencia,
+                    lat=parada_ida.lat,
+                    lng=parada_ida.lng,
+                    ordem=seq_local + 1,
+                    total_passageiros=parada_ida.total_passageiros,
+                )
+                if seq_local < len(schedule):
+                    parada_volta.horario_chegada = schedule[seq_local]['chegada']
+                    parada_volta.horario_partida = schedule[seq_local]['partida']
+
+                db.session.add(parada_volta)
+
+        total_dist_volta += resultado['total_distance_km']
+        if resultado['total_duration_min'] > max_dur_volta:
+            max_dur_volta = resultado['total_duration_min']
+        num_volta += 1
+
+    rot.total_rotas_volta = num_volta
+    rot.distancia_total_km_volta = round(total_dist_volta, 2)
+    rot.duracao_total_minutos_volta = round(max_dur_volta)
+    db.session.commit()
+
+    flash(f'Retorno gerado: {num_volta} rota(s) de volta, {round(total_dist_volta, 1)} km total.', 'success')
+    return redirect(url_for('roteirizador.visualizar', id=id))
+
+
+# ============================================
 # FINALIZAR
 # ============================================
 
@@ -762,8 +894,15 @@ def salvar_rota_editada(id):
 def relatorio(id):
     rot = Roteirizacao.query.get_or_404(id)
 
-    roteiros = rot.roteiros.filter_by(ativo=True).order_by(RoteiroPlanejado.ordem).all()
-    paradas = rot.paradas.filter_by(ativo=True).order_by(PontoParada.roteiro_id, PontoParada.ordem).all()
+    all_roteiros = rot.roteiros.filter_by(ativo=True).order_by(RoteiroPlanejado.ordem).all()
+    roteiros = [r for r in all_roteiros if r.tipo != 'volta']
+    roteiros_volta = [r for r in all_roteiros if r.tipo == 'volta']
+
+    all_paradas = rot.paradas.filter_by(ativo=True).order_by(PontoParada.roteiro_id, PontoParada.ordem).all()
+    volta_ids = {r.id for r in roteiros_volta}
+    paradas = [p for p in all_paradas if p.roteiro_id not in volta_ids]
+    paradas_volta = [p for p in all_paradas if p.roteiro_id in volta_ids]
+
     passageiros = rot.passageiros.filter_by(ativo=True).order_by(Passageiro.nome).all()
 
     api_key = current_app.config['GOOGLE_MAPS_API_KEY']
@@ -772,7 +911,9 @@ def relatorio(id):
     return render_template('roteirizador/relatorio.html',
                            rot=rot,
                            roteiros=roteiros,
+                           roteiros_volta=roteiros_volta,
                            paradas=paradas,
+                           paradas_volta=paradas_volta,
                            passageiros=passageiros,
                            api_key=api_key,
                            tipos_veiculo=tipos_veiculo)

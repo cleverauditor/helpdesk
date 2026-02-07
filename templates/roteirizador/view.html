@@ -160,6 +160,25 @@
                     </div>
                 </div>
 
+                <!-- Gerar Retorno -->
+                <div class="card mt-3">
+                    <div class="card-header bg-primary text-white"><h6 class="mb-0"><i class="bi bi-arrow-return-left"></i> Gerar Retorno (Volta)</h6></div>
+                    <div class="card-body">
+                        <form method="POST" action="{{ url_for('roteirizador.gerar_retorno', id=rot.id) }}">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-6">
+                                    <label class="form-label">Horário de Saída do Destino</label>
+                                    <input type="time" name="horario_saida_retorno" class="form-control" value="{{ rot.horario_saida_retorno.strftime('%H:%M') if rot.horario_saida_retorno else '17:00' }}" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <button type="submit" class="btn btn-primary"><i class="bi bi-arrow-return-left"></i> Gerar Retorno</button>
+                                </div>
+                            </div>
+                            <small class="text-muted mt-2 d-block">Usa as mesmas paradas da ida, re-otimiza a ordem e calcula horários progressivamente.</small>
+                        </form>
+                    </div>
+                </div>
+
                 {% elif rot.status == 'finalizado' %}
                 <div class="alert alert-primary d-flex justify-content-between align-items-center">
                     <div>
@@ -171,6 +190,24 @@
                             <i class="bi bi-arrow-counterclockwise"></i> Reabrir
                         </button>
                     </form>
+                </div>
+
+                <!-- Gerar Retorno (finalizado) -->
+                <div class="card mt-3">
+                    <div class="card-header bg-primary text-white"><h6 class="mb-0"><i class="bi bi-arrow-return-left"></i> Gerar Retorno (Volta)</h6></div>
+                    <div class="card-body">
+                        <form method="POST" action="{{ url_for('roteirizador.gerar_retorno', id=rot.id) }}">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-6">
+                                    <label class="form-label">Horário de Saída do Destino</label>
+                                    <input type="time" name="horario_saida_retorno" class="form-control" value="{{ rot.horario_saida_retorno.strftime('%H:%M') if rot.horario_saida_retorno else '17:00' }}" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <button type="submit" class="btn btn-primary"><i class="bi bi-arrow-return-left"></i> Gerar Retorno</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
                 </div>
                 {% endif %}
             </div>
@@ -229,20 +266,124 @@
             </div>
         </div>
         {% endfor %}
+
+        <!-- Tabela de paradas por rota (VOLTA) -->
+        {% if roteiros_volta %}
+        <h4 class="mt-4 mb-3"><i class="bi bi-arrow-return-left"></i> Rotas de Retorno</h4>
+        {% for roteiro in roteiros_volta %}
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white d-flex justify-content-between">
+                <h5 class="mb-0"><i class="bi bi-signpost-2"></i> {{ roteiro.nome }}</h5>
+                <div>
+                    <span class="badge bg-light text-dark">{{ roteiro.distancia_km or '-' }} km</span>
+                    <span class="badge bg-light text-dark">{{ roteiro.duracao_minutos or '-' }} min</span>
+                    <span class="badge bg-light text-dark">{{ roteiro.total_passageiros or 0 }} passageiros</span>
+                    {% if roteiro.horario_saida %}<span class="badge bg-warning text-dark">Saída: {{ roteiro.horario_saida.strftime('%H:%M') }}</span>{% endif %}
+                    {% set ns = namespace(veiculo_recomendado=none) %}
+                    {% for tv in tipos_veiculo %}
+                        {% if not ns.veiculo_recomendado and tv.capacidade >= (roteiro.total_passageiros or 0) %}
+                            {% set ns.veiculo_recomendado = tv %}
+                        {% endif %}
+                    {% endfor %}
+                    {% if ns.veiculo_recomendado %}
+                    <span class="badge bg-info text-dark"><i class="bi bi-truck"></i> {{ ns.veiculo_recomendado.nome }} ({{ ns.veiculo_recomendado.capacidade }} lug.)</span>
+                    {% elif tipos_veiculo %}
+                    <span class="badge bg-danger"><i class="bi bi-exclamation-triangle"></i> Excede capacidade</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Parada</th>
+                            <th>Endereço Referência</th>
+                            <th class="text-center">Passageiros</th>
+                            <th class="text-center">Chegada</th>
+                            <th class="text-center">Partida</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="table-primary">
+                            <td class="text-center"><i class="bi bi-building text-primary"></i></td>
+                            <td colspan="2"><strong>SAÍDA: {{ rot.destino_endereco }}</strong></td>
+                            <td></td>
+                            <td class="text-center"><strong>{{ rot.horario_saida_retorno.strftime('%H:%M') if rot.horario_saida_retorno else '-' }}</strong></td>
+                            <td class="text-center"><strong>{{ rot.horario_saida_retorno.strftime('%H:%M') if rot.horario_saida_retorno else '-' }}</strong></td>
+                        </tr>
+                        {% for p in paradas_volta %}
+                        {% if p.roteiro_id == roteiro.id %}
+                        <tr>
+                            <td><span class="badge bg-primary">{{ p.ordem or '-' }}</span></td>
+                            <td><strong>{{ p.nome }}</strong></td>
+                            <td class="text-truncate" style="max-width: 250px;" title="{{ p.endereco_referencia }}">{{ p.endereco_referencia or '-' }}</td>
+                            <td class="text-center">{{ p.total_passageiros }}</td>
+                            <td class="text-center">{{ p.horario_chegada.strftime('%H:%M') if p.horario_chegada else '-' }}</td>
+                            <td class="text-center">{{ p.horario_partida.strftime('%H:%M') if p.horario_partida else '-' }}</td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
     </div>
 
     <!-- Sidebar -->
     <div class="col-md-4">
-        <!-- Detalhamento por Rota -->
+        <!-- Detalhamento por Rota (Ida) -->
         {% if roteiros %}
         <div class="card mb-4">
-            <div class="card-header"><h5 class="mb-0"><i class="bi bi-signpost-split"></i> Rotas</h5></div>
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-signpost-split"></i> Rotas (Ida)</h5></div>
             <div class="list-group list-group-flush">
                 {% for r in roteiros %}
                 <div class="list-group-item">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <span class="badge rounded-pill me-2" style="background-color: {{ ['#E82000','#0d6efd','#198754','#6f42c1','#fd7e14','#dc3545'][loop.index0 % 6] }};">&nbsp;&nbsp;</span>
+                            <strong>{{ r.nome }}</strong>
+                        </div>
+                    </div>
+                    <div class="mt-1 ms-4">
+                        <small class="text-muted">
+                            <i class="bi bi-speedometer2"></i> {{ r.distancia_km or '-' }} km
+                            &middot; <i class="bi bi-clock"></i> {{ r.duracao_minutos or '-' }} min
+                            &middot; <i class="bi bi-people-fill"></i> {{ r.total_passageiros or 0 }} passageiros
+                        </small>
+                        {% if r.horario_saida %}
+                        <br><small class="text-muted"><i class="bi bi-box-arrow-right"></i> Saída: <strong>{{ r.horario_saida.strftime('%H:%M') }}</strong></small>
+                        {% endif %}
+                        {% set ns = namespace(veiculo_rec=none) %}
+                        {% for tv in tipos_veiculo %}
+                            {% if not ns.veiculo_rec and tv.capacidade >= (r.total_passageiros or 0) %}
+                                {% set ns.veiculo_rec = tv %}
+                            {% endif %}
+                        {% endfor %}
+                        {% if ns.veiculo_rec %}
+                        <br><small class="text-info"><i class="bi bi-truck"></i> <strong>{{ ns.veiculo_rec.nome }}</strong> ({{ ns.veiculo_rec.capacidade }} lugares)</small>
+                        {% elif tipos_veiculo %}
+                        <br><small class="text-danger"><i class="bi bi-exclamation-triangle"></i> Excede capacidade</small>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Rotas de Volta (sidebar) -->
+        {% if roteiros_volta %}
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white"><h5 class="mb-0"><i class="bi bi-arrow-return-left"></i> Rotas (Volta)</h5></div>
+            <div class="list-group list-group-flush">
+                {% for r in roteiros_volta %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="badge rounded-pill bg-primary me-2">&nbsp;&nbsp;</span>
                             <strong>{{ r.nome }}</strong>
                         </div>
                     </div>

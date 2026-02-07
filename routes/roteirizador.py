@@ -278,6 +278,9 @@ def geocodificar(id):
     ).all()
 
     if not passageiros:
+        if rot.status == 'rascunho':
+            rot.status = 'geocodificado'
+            db.session.commit()
         flash('Todos os passageiros já foram geocodificados.', 'info')
         return redirect(url_for('roteirizador.visualizar', id=id))
 

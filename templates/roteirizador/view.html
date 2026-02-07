@@ -616,6 +616,25 @@ var roteirosData = [
     {% endfor %}
 ];
 
+// Dados de volta
+var paradasVoltaData = [
+    {% for p in paradas_volta %}
+    { id: {{ p.id }}, lat: {{ p.lat }}, lng: {{ p.lng }}, nome: {{ p.nome|tojson }}, ordem: {{ p.ordem|default(0, true)|tojson }}, total: {{ p.total_passageiros }}, endereco: {{ (p.endereco_referencia or '-')|tojson }}, chegada: {{ (p.horario_chegada.strftime('%H:%M') if p.horario_chegada else '-')|tojson }}, roteiroId: {{ p.roteiro_id|default('null', true) }} },
+    {% endfor %}
+];
+
+var roteirosVoltaPolylines = [
+    {% for r in roteiros_volta %}{% if r.polyline_encoded %}
+    { id: {{ r.id }}, encoded: {{ r.polyline_encoded|tojson }} },
+    {% endif %}{% endfor %}
+];
+
+var roteirosVoltaData = [
+    {% for r in roteiros_volta %}
+    { id: {{ r.id }}, nome: {{ r.nome|tojson }} },
+    {% endfor %}
+];
+
 function initMap() {
     map = new google.maps.Map(document.getElementById('map'), {
         zoom: 12,
@@ -723,6 +742,48 @@ function initMap() {
             staticPolylines.push(poly);
         } catch(e) {
             console.error('Erro ao decodificar polyline da rota ' + r.id + ':', e);
+        }
+    });
+
+    // === ROTAS DE VOLTA ===
+    var voltaColorMap = {};
+    roteirosVoltaData.forEach(function(r, idx) {
+        voltaColorMap[r.id] = ROUTE_COLORS[idx % ROUTE_COLORS.length];
+    });
+
+    // Paradas de volta (marcadores com borda tracejada / "V" prefix)
+    paradasVoltaData.forEach(function(p) {
+        var color = (p.roteiroId && voltaColorMap[p.roteiroId]) ? voltaColorMap[p.roteiroId] : '#6c757d';
+        var marker = new google.maps.Marker({
+            position: { lat: p.lat, lng: p.lng },
+            map: map,
+            icon: stopIcon(color, 'V' + p.ordem),
+            title: p.nome + ' (Volta) - ' + p.total + ' passageiros',
+            zIndex: 90
+        });
+        bounds.extend({ lat: p.lat, lng: p.lng });
+        var infoWindow = new google.maps.InfoWindow({
+            content: '<strong>' + p.nome + '</strong> <span class="badge bg-primary">Volta</span><br>' + p.endereco + '<br>Passageiros: ' + p.total + '<br>Chegada: ' + p.chegada
+        });
+        marker.addListener('click', function() { infoWindow.open(map, marker); });
+    });
+
+    // Polylines de volta (tracejadas)
+    roteirosVoltaPolylines.forEach(function(r, idx) {
+        try {
+            var decoded = google.maps.geometry.encoding.decodePath(r.encoded);
+            var lineSymbol = { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 };
+            new google.maps.Polyline({
+                path: decoded,
+                geodesic: true,
+                strokeColor: ROUTE_COLORS[idx % ROUTE_COLORS.length],
+                strokeOpacity: 0,
+                strokeWeight: 0,
+                icons: [{ icon: lineSymbol, offset: '0', repeat: '15px' }],
+                map: map
+            });
+        } catch(e) {
+            console.error('Erro polyline volta:', e);
         }
     });
 

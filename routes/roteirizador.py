@@ -562,6 +562,12 @@ def _salvar_simulacao(rot):
     roteiros = rot.roteiros.filter_by(ativo=True).order_by(RoteiroPlanejado.ordem).all()
     paradas = rot.paradas.filter_by(ativo=True).order_by(PontoParada.roteiro_id, PontoParada.ordem).all()
 
+    # Mapa de parada_id -> nome da parada
+    parada_map = {p.id: p.nome for p in paradas}
+
+    # Passageiros ativos
+    passageiros = rot.passageiros.filter_by(ativo=True).order_by(Passageiro.nome).all()
+
     dados = {
         'roteiros': [{
             'nome': r.nome,
@@ -585,6 +591,14 @@ def _salvar_simulacao(rot):
             'horario_chegada': p.horario_chegada.strftime('%H:%M') if p.horario_chegada else None,
             'horario_partida': p.horario_partida.strftime('%H:%M') if p.horario_partida else None,
         } for p in paradas],
+        'passageiros': [{
+            'nome': ps.nome,
+            'endereco': ps.endereco_completo() or '-',
+            'bairro': ps.bairro or '-',
+            'parada_nome': parada_map.get(ps.parada_id, '-'),
+            'distancia_ate_parada': ps.distancia_ate_parada,
+            'tempo_no_veiculo': ps.tempo_no_veiculo,
+        } for ps in passageiros],
     }
 
     simulacao = Simulacao(

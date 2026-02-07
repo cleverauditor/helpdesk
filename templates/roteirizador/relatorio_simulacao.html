@@ -163,6 +163,104 @@
 </div>
 {% endfor %}
 
+<!-- Rotas de Retorno (simulação) -->
+{% if dados.get('roteiros_volta') %}
+<h3 class="mt-5 mb-3"><i class="bi bi-arrow-return-left"></i> Rotas de Retorno</h3>
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="summary-card">
+            <div class="value">{{ dados.get('total_rotas_volta', 0) or 0 }}</div>
+            <div class="label">Veículos (Volta)</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="summary-card">
+            <div class="value">{{ '%.1f'|format(dados.distancia_total_km_volta) if dados.get('distancia_total_km_volta') else '-' }}</div>
+            <div class="label">Km Total (Volta)</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="summary-card">
+            <div class="value">{{ dados.get('duracao_total_minutos_volta') or '-' }}</div>
+            <div class="label">Min. Maior Rota</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="summary-card">
+            <div class="value">{{ dados.get('horario_saida_retorno') or '-' }}</div>
+            <div class="label">Saída do Destino</div>
+        </div>
+    </div>
+</div>
+
+{% for roteiro in dados['roteiros_volta'] %}
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <div class="d-flex justify-content-between">
+            <h5 class="mb-0"><i class="bi bi-signpost-split"></i> {{ roteiro.nome }}</h5>
+            <div>
+                <span class="badge bg-light text-dark">{{ roteiro.distancia_km or '-' }} km</span>
+                <span class="badge bg-light text-dark">{{ roteiro.duracao_minutos or '-' }} min</span>
+                <span class="badge bg-light text-dark">{{ roteiro.total_passageiros or 0 }} passageiros</span>
+                {% if roteiro.horario_saida %}
+                <span class="badge bg-warning text-dark">Saída: {{ roteiro.horario_saida }}</span>
+                {% endif %}
+                {% set ns = namespace(veiculo_recomendado=none) %}
+                {% for tv in tipos_veiculo %}
+                    {% if not ns.veiculo_recomendado and tv.capacidade >= (roteiro.total_passageiros or 0) %}
+                        {% set ns.veiculo_recomendado = tv %}
+                    {% endif %}
+                {% endfor %}
+                {% if ns.veiculo_recomendado %}
+                <span class="badge bg-info text-dark"><i class="bi bi-truck"></i> {{ ns.veiculo_recomendado.nome }} ({{ ns.veiculo_recomendado.capacidade }} lug.)</span>
+                {% elif tipos_veiculo %}
+                <span class="badge bg-danger"><i class="bi bi-exclamation-triangle"></i> Excede capacidade</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <h6 class="mb-3"><i class="bi bi-list-ol"></i> Sequência de Paradas</h6>
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th class="text-center" style="width: 50px;">#</th>
+                        <th>Parada</th>
+                        <th>Endereço de Referência</th>
+                        <th class="text-center">Chegada</th>
+                        <th class="text-center">Partida</th>
+                        <th class="text-center">Passageiros</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="table-primary">
+                        <td class="text-center"><i class="bi bi-building text-primary"></i></td>
+                        <td colspan="2"><strong>SAÍDA: {{ rot.destino_endereco }}</strong></td>
+                        <td class="text-center"><strong>{{ dados.get('horario_saida_retorno') or '-' }}</strong></td>
+                        <td class="text-center"><strong>{{ dados.get('horario_saida_retorno') or '-' }}</strong></td>
+                        <td></td>
+                    </tr>
+                    {% for p in dados.get('paradas_volta', []) %}
+                        {% if p.roteiro_nome == roteiro.nome %}
+                    <tr>
+                        <td class="text-center"><span class="badge bg-primary">{{ p.ordem }}</span></td>
+                        <td><strong>{{ p.nome }}</strong></td>
+                        <td>{{ p.endereco_referencia or '-' }}</td>
+                        <td class="text-center">{{ p.horario_chegada or '-' }}</td>
+                        <td class="text-center">{{ p.horario_partida or '-' }}</td>
+                        <td class="text-center"><span class="badge bg-secondary">{{ p.total_passageiros }}</span></td>
+                    </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
 <!-- Lista de Passageiros -->
 {% if dados.get('passageiros') %}
 <div class="card mb-4">

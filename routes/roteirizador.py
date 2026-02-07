@@ -570,11 +570,17 @@ def _salvar_simulacao(rot):
     nome = f'Simulação {num} - {rot.distancia_maxima_caminhada}m, Cap. {rot.capacidade_veiculo}'
 
     # Snapshot dos dados das rotas e paradas
-    roteiros = rot.roteiros.filter_by(ativo=True).order_by(RoteiroPlanejado.ordem).all()
-    paradas = rot.paradas.filter_by(ativo=True).order_by(PontoParada.roteiro_id, PontoParada.ordem).all()
+    all_roteiros = rot.roteiros.filter_by(ativo=True).order_by(RoteiroPlanejado.ordem).all()
+    roteiros_ida = [r for r in all_roteiros if r.tipo != 'volta']
+    roteiros_volta = [r for r in all_roteiros if r.tipo == 'volta']
 
-    # Mapa de parada_id -> nome da parada
-    parada_map = {p.id: p.nome for p in paradas}
+    all_paradas = rot.paradas.filter_by(ativo=True).order_by(PontoParada.roteiro_id, PontoParada.ordem).all()
+    volta_ids = {r.id for r in roteiros_volta}
+    paradas_ida = [p for p in all_paradas if p.roteiro_id not in volta_ids]
+    paradas_volta = [p for p in all_paradas if p.roteiro_id in volta_ids]
+
+    # Mapa de parada_id -> nome da parada (ida)
+    parada_map = {p.id: p.nome for p in paradas_ida}
 
     # Passageiros ativos
     passageiros = rot.passageiros.filter_by(ativo=True).order_by(Passageiro.nome).all()
@@ -590,18 +596,18 @@ def _salvar_simulacao(rot):
             'horario_saida': r.horario_saida.strftime('%H:%M') if r.horario_saida else None,
             'horario_chegada_destino': r.horario_chegada_destino.strftime('%H:%M') if r.horario_chegada_destino else None,
             'polyline_encoded': r.polyline_encoded,
-        } for r in roteiros],
+        } for r in roteiros_ida],
         'paradas': [{
             'nome': p.nome,
             'endereco_referencia': p.endereco_referencia,
             'lat': p.lat,
             'lng': p.lng,
             'ordem': p.ordem,
-            'roteiro_nome': next((r.nome for r in roteiros if r.id == p.roteiro_id), None),
+            'roteiro_nome': next((r.nome for r in roteiros_ida if r.id == p.roteiro_id), None),
             'total_passageiros': p.total_passageiros,
             'horario_chegada': p.horario_chegada.strftime('%H:%M') if p.horario_chegada else None,
             'horario_partida': p.horario_partida.strftime('%H:%M') if p.horario_partida else None,
-        } for p in paradas],
+        } for p in paradas_ida],
         'passageiros': [{
             'nome': ps.nome,
             'endereco': ps.endereco_completo() or '-',
@@ -610,6 +616,31 @@ def _salvar_simulacao(rot):
             'distancia_ate_parada': ps.distancia_ate_parada,
             'tempo_no_veiculo': ps.tempo_no_veiculo,
         } for ps in passageiros],
+        'roteiros_volta': [{
+            'nome': r.nome,
+            'ordem': r.ordem,
+            'distancia_km': r.distancia_km,
+            'duracao_minutos': r.duracao_minutos,
+            'total_passageiros': r.total_passageiros,
+            'capacidade_veiculo': r.capacidade_veiculo,
+            'horario_saida': r.horario_saida.strftime('%H:%M') if r.horario_saida else None,
+            'polyline_encoded': r.polyline_encoded,
+        } for r in roteiros_volta],
+        'paradas_volta': [{
+            'nome': p.nome,
+            'endereco_referencia': p.endereco_referencia,
+            'lat': p.lat,
+            'lng': p.lng,
+            'ordem': p.ordem,
+            'roteiro_nome': next((r.nome for r in roteiros_volta if r.id == p.roteiro_id), None),
+            'total_passageiros': p.total_passageiros,
+            'horario_chegada': p.horario_chegada.strftime('%H:%M') if p.horario_chegada else None,
+            'horario_partida': p.horario_partida.strftime('%H:%M') if p.horario_partida else None,
+        } for p in paradas_volta],
+        'horario_saida_retorno': rot.horario_saida_retorno.strftime('%H:%M') if rot.horario_saida_retorno else None,
+        'total_rotas_volta': rot.total_rotas_volta,
+        'distancia_total_km_volta': rot.distancia_total_km_volta,
+        'duracao_total_minutos_volta': rot.duracao_total_minutos_volta,
     }
 
     simulacao = Simulacao(
@@ -1095,7 +1126,11 @@ def aplicar_simulacao(id, sim_id):
     if rot.status in ('otimizado', 'finalizado') and rot.total_rotas:
         _salvar_simulacao(rot)
 
-    # Limpar dados atuais
+    # Limpar dados atuais (roteiros + paradas de volta)
+    # Primeiro deletar paradas de volta (são cópias, não originais)
+    roteiros_volta_atuais = rot.roteiros.filter_by(tipo='volta').all()
+    for rv in roteiros_volta_atuais:
+        PontoParada.query.filter_by(roteiro_id=rv.id).delete()
     RoteiroPlanejado.query.filter_by(roteirizacao_id=id).delete()
     for p in rot.paradas.filter_by(ativo=True).all():
         p.roteiro_id = None
@@ -1122,6 +1157,7 @@ def aplicar_simulacao(id, sim_id):
             roteirizacao_id=id,
             nome=rd['nome'],
             ordem=rd['ordem'],
+            tipo='ida',
             distancia_km=rd['distancia_km'],
             duracao_minutos=rd['duracao_minutos'],
             total_passageiros=rd['total_passageiros'],
@@ -1138,7 +1174,7 @@ def aplicar_simulacao(id, sim_id):
         db.session.flush()
         roteiro_map[rd['nome']] = roteiro.id
 
-    # Restaurar atribuições das paradas
+    # Restaurar atribuições das paradas (ida)
     for pd in dados.get('paradas', []):
         parada = rot.paradas.filter_by(nome=pd['nome'], lat=pd['lat'], lng=pd['lng']).first()
         if parada and pd.get('roteiro_nome') in roteiro_map:
@@ -1150,6 +1186,56 @@ def aplicar_simulacao(id, sim_id):
             if pd.get('horario_partida'):
                 h, m = pd['horario_partida'].split(':')
                 parada.horario_partida = time(int(h), int(m))
+
+    # Restaurar rotas de volta (se existirem no JSON)
+    volta_roteiro_map = {}
+    for rd in dados.get('roteiros_volta', []):
+        roteiro = RoteiroPlanejado(
+            roteirizacao_id=id,
+            nome=rd['nome'],
+            ordem=rd['ordem'],
+            tipo='volta',
+            distancia_km=rd['distancia_km'],
+            duracao_minutos=rd['duracao_minutos'],
+            total_passageiros=rd['total_passageiros'],
+            capacidade_veiculo=rd['capacidade_veiculo'],
+            polyline_encoded=rd.get('polyline_encoded'),
+        )
+        if rd.get('horario_saida'):
+            h, m = rd['horario_saida'].split(':')
+            roteiro.horario_saida = time(int(h), int(m))
+        db.session.add(roteiro)
+        db.session.flush()
+        volta_roteiro_map[rd['nome']] = roteiro.id
+
+    # Restaurar paradas de volta (criar novas)
+    for pd in dados.get('paradas_volta', []):
+        if pd.get('roteiro_nome') in volta_roteiro_map:
+            parada_volta = PontoParada(
+                roteirizacao_id=id,
+                roteiro_id=volta_roteiro_map[pd['roteiro_nome']],
+                nome=pd['nome'],
+                endereco_referencia=pd.get('endereco_referencia'),
+                lat=pd['lat'],
+                lng=pd['lng'],
+                ordem=pd['ordem'],
+                total_passageiros=pd.get('total_passageiros', 0),
+            )
+            if pd.get('horario_chegada'):
+                h, m = pd['horario_chegada'].split(':')
+                parada_volta.horario_chegada = time(int(h), int(m))
+            if pd.get('horario_partida'):
+                h, m = pd['horario_partida'].split(':')
+                parada_volta.horario_partida = time(int(h), int(m))
+            db.session.add(parada_volta)
+
+    # Restaurar métricas de volta
+    if dados.get('horario_saida_retorno'):
+        h, m = dados['horario_saida_retorno'].split(':')
+        rot.horario_saida_retorno = time(int(h), int(m))
+    rot.total_rotas_volta = dados.get('total_rotas_volta')
+    rot.distancia_total_km_volta = dados.get('distancia_total_km_volta')
+    rot.duracao_total_minutos_volta = dados.get('duracao_total_minutos_volta')
 
     rot.status = 'otimizado'
     db.session.commit()

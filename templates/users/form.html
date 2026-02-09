@@ -52,10 +52,16 @@
                                         {% if user and user.tipo == 'atendente' %}selected{% endif %}>
                                     Atendente
                                 </option>
+                                {% if not is_gestor %}
+                                <option value="gestor"
+                                        {% if user and user.tipo == 'gestor' %}selected{% endif %}>
+                                    Gestor
+                                </option>
                                 <option value="admin"
                                         {% if user and user.tipo == 'admin' %}selected{% endif %}>
                                     Administrador
                                 </option>
+                                {% endif %}
                             </select>
                         </div>
                         <div class="col-md-6 mb-3" id="campoEmpresa" style="display: none;">
@@ -160,6 +166,7 @@
             </div>
             <div class="card-body">
                 <p><strong>Administrador:</strong> Acesso total ao sistema e todos os módulos.</p>
+                <p><strong>Gestor:</strong> Gerencia usuários das suas categorias (criar, editar, ativar/desativar). Também atende chamados.</p>
                 <p><strong>Atendente:</strong> Atende chamados das categorias atribuídas. Acessa módulos conforme permissões.</p>
                 <p><strong>Cliente Interno:</strong> Funcionário da empresa, pode abrir chamados.</p>
                 <p class="mb-0"><strong>Cliente Externo:</strong> Cliente vinculado a uma empresa cadastrada.</p>
@@ -212,8 +219,12 @@ function toggleCampos() {
         campoEmpresa.style.display = 'none';
     }
 
-    // Categorias/Módulos para atendente e clientes
-    if (tipo === 'atendente') {
+    // Categorias/Módulos para gestor, atendente e clientes
+    if (tipo === 'gestor') {
+        campoCategorias.style.display = 'block';
+        labelCategorias.textContent = 'Categorias de Gestão';
+        helpCategorias.textContent = 'Selecione as categorias que este gestor poderá administrar. O gestor poderá criar e gerenciar usuários nestas categorias, além de atender chamados.';
+    } else if (tipo === 'atendente') {
         campoCategorias.style.display = 'block';
         labelCategorias.textContent = 'Módulos e Permissões';
         helpCategorias.textContent = 'Selecione as categorias de atendimento e módulos que este usuário pode acessar. Marque "Auditoria" para liberar Auditoria de Rotas e Combustível.';

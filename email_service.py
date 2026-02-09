@@ -51,9 +51,9 @@ def notify_new_ticket(ticket):
 
     recipients = []
 
-    # Buscar todos admins e atendentes ativos
+    # Buscar todos admins, gestores e atendentes ativos
     usuarios = User.query.filter(
-        User.tipo.in_(['admin', 'atendente']),
+        User.tipo.in_(['admin', 'gestor', 'atendente']),
         User.ativo == True
     ).all()
 

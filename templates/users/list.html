@@ -18,7 +18,10 @@
                 <label class="form-label">Tipo</label>
                 <select name="tipo" class="form-select">
                     <option value="">Todos</option>
+                    {% if not is_gestor %}
                     <option value="admin" {% if request.args.get('tipo') == 'admin' %}selected{% endif %}>Admin</option>
+                    <option value="gestor" {% if request.args.get('tipo') == 'gestor' %}selected{% endif %}>Gestor</option>
+                    {% endif %}
                     <option value="atendente" {% if request.args.get('tipo') == 'atendente' %}selected{% endif %}>Atendente</option>
                     <option value="cliente_interno" {% if request.args.get('tipo') == 'cliente_interno' %}selected{% endif %}>Cliente Interno</option>
                     <option value="cliente_externo" {% if request.args.get('tipo') == 'cliente_externo' %}selected{% endif %}>Cliente Externo</option>
@@ -71,6 +74,8 @@
                         <td>
                             {% if user.tipo == 'admin' %}
                             <span class="badge bg-danger">Admin</span>
+                            {% elif user.tipo == 'gestor' %}
+                            <span class="badge bg-warning text-dark">Gestor</span>
                             {% elif user.tipo == 'atendente' %}
                             <span class="badge bg-primary">Atendente</span>
                             {% elif user.tipo == 'cliente_interno' %}

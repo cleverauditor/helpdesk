@@ -846,8 +846,16 @@ def editar_mapa(id):
         flash('Otimize a rota antes de editar o mapa.', 'warning')
         return redirect(url_for('roteirizador.visualizar', id=id))
 
-    roteiros = rot.roteiros.filter_by(ativo=True).order_by(RoteiroPlanejado.ordem).all()
+    # Separar roteiros ida e volta
+    all_roteiros = rot.roteiros.filter_by(ativo=True).order_by(RoteiroPlanejado.ordem).all()
+    roteiros_ida = [r for r in all_roteiros if r.tipo != 'volta']
+    roteiros_volta = [r for r in all_roteiros if r.tipo == 'volta']
+
     paradas = rot.paradas.filter_by(ativo=True).order_by(PontoParada.roteiro_id, PontoParada.ordem).all()
+    volta_ids = {r.id for r in roteiros_volta}
+    paradas_ida = [p for p in paradas if p.roteiro_id not in volta_ids]
+    paradas_volta = [p for p in paradas if p.roteiro_id in volta_ids]
+
     passageiros = rot.passageiros.filter(
         Passageiro.ativo == True,
         Passageiro.lat.isnot(None)
@@ -857,9 +865,12 @@ def editar_mapa(id):
 
     return render_template('roteirizador/editar_mapa.html',
                            rot=rot,
-                           roteiros=roteiros,
-                           paradas=paradas,
+                           roteiros_ida=roteiros_ida,
+                           roteiros_volta=roteiros_volta,
+                           paradas_ida=paradas_ida,
+                           paradas_volta=paradas_volta,
                            passageiros=passageiros,
+                           tem_volta=len(roteiros_volta) > 0,
                            api_key=api_key)
 
 
@@ -893,12 +904,16 @@ def salvar_rota_editada(id):
     roteiro.distancia_km = round(total_dist_m / 1000, 2)
     roteiro.duracao_minutos = round(total_dur_s / 60)
 
-    # Recalcular horários com os novos legs
+    # Recalcular horários com os novos legs (ida vs volta)
     dwell = current_app.config.get('ROTEIRIZADOR_DWELL_TIME', 60)
-    schedule = rutils.calcular_horarios(legs, rot.horario_chegada, dwell)
-
-    if schedule:
-        roteiro.horario_saida = schedule[0]['chegada']
+    if roteiro.tipo == 'volta' and rot.horario_saida_retorno:
+        schedule = rutils.calcular_horarios_volta(legs, rot.horario_saida_retorno, dwell)
+        if schedule:
+            roteiro.horario_saida = rot.horario_saida_retorno
+    else:
+        schedule = rutils.calcular_horarios(legs, rot.horario_chegada, dwell)
+        if schedule:
+            roteiro.horario_saida = schedule[0]['chegada']
 
     # Atualizar paradas na ordem recebida dos waypoints
     paradas = roteiro.paradas.filter_by(ativo=True).order_by(PontoParada.ordem).all()
@@ -930,6 +945,389 @@ def salvar_rota_editada(id):
     db.session.commit()
 
     return jsonify({'ok': True, 'msg': 'Rota atualizada com sucesso!'})
+
+
+# ============================================
+# MOVER PARADA ENTRE ROTAS
+# ============================================
+
+@roteirizador_bp.route('/<int:id>/mover_parada', methods=['POST'])
+@roteirizador_required
+def mover_parada(id):
+    rot = Roteirizacao.query.get_or_404(id)
+    data = request.get_json()
+
+    if not data:
+        return jsonify({'ok': False, 'msg': 'Dados inválidos'}), 400
+
+    parada_id = data.get('parada_id')
+    roteiro_destino_id = data.get('roteiro_destino_id')
+
+    parada = PontoParada.query.get(parada_id)
+    if not parada or parada.roteirizacao_id != id:
+        return jsonify({'ok': False, 'msg': 'Parada não encontrada'}), 404
+
+    roteiro_destino = RoteiroPlanejado.query.get(roteiro_destino_id)
+    if not roteiro_destino or roteiro_destino.roteirizacao_id != id:
+        return jsonify({'ok': False, 'msg': 'Roteiro destino não encontrado'}), 404
+
+    roteiro_origem = RoteiroPlanejado.query.get(parada.roteiro_id)
+    if not roteiro_origem:
+        return jsonify({'ok': False, 'msg': 'Roteiro origem não encontrado'}), 404
+
+    # Validar mesmo tipo (ida com ida, volta com volta)
+    if roteiro_origem.tipo != roteiro_destino.tipo:
+        return jsonify({'ok': False, 'msg': 'Só é possível mover entre rotas do mesmo tipo'}), 400
+
+    roteiro_origem_id = parada.roteiro_id
+
+    # Mover parada para roteiro destino
+    parada.roteiro_id = roteiro_destino_id
+
+    # Flush para que queries reflitam a mudança de roteiro_id
+    db.session.flush()
+
+    # Colocar no final do roteiro destino
+    max_ordem = db.session.query(db.func.max(PontoParada.ordem)).filter(
+        PontoParada.roteiro_id == roteiro_destino_id,
+        PontoParada.ativo == True,
+        PontoParada.id != parada.id
+    ).scalar() or 0
+    parada.ordem = max_ordem + 1
+
+    # Resequenciar paradas no roteiro de origem
+    paradas_origem = PontoParada.query.filter(
+        PontoParada.roteiro_id == roteiro_origem_id,
+        PontoParada.ativo == True
+    ).order_by(PontoParada.ordem).all()
+    for seq, p in enumerate(paradas_origem, start=1):
+        p.ordem = seq
+
+    # Recalcular total_passageiros nos roteiros
+    roteiro_origem.total_passageiros = sum(
+        p.total_passageiros or 0 for p in PontoParada.query.filter(
+            PontoParada.roteiro_id == roteiro_origem_id,
+            PontoParada.ativo == True
+        ).all()
+    )
+    roteiro_destino.total_passageiros = sum(
+        p.total_passageiros or 0 for p in PontoParada.query.filter(
+            PontoParada.roteiro_id == roteiro_destino_id,
+            PontoParada.ativo == True
+        ).all()
+    )
+
+    db.session.commit()
+
+    return jsonify({
+        'ok': True,
+        'msg': 'Parada movida com sucesso!',
+        'parada_id': parada_id,
+        'roteiro_origem_id': roteiro_origem_id,
+        'roteiro_destino_id': roteiro_destino_id,
+        'total_pass_origem': roteiro_origem.total_passageiros,
+        'total_pass_destino': roteiro_destino.total_passageiros
+    })
+
+
+# ============================================
+# MOVER PASSAGEIRO PARA OUTRA ROTA
+# ============================================
+
+@roteirizador_bp.route('/<int:id>/mover_passageiro', methods=['POST'])
+@roteirizador_required
+def mover_passageiro(id):
+    rot = Roteirizacao.query.get_or_404(id)
+    data = request.get_json()
+
+    if not data:
+        return jsonify({'ok': False, 'msg': 'Dados inválidos'}), 400
+
+    passageiro_id = data.get('passageiro_id')
+    roteiro_destino_id = data.get('roteiro_destino_id')
+
+    passageiro = Passageiro.query.get(passageiro_id)
+    if not passageiro or passageiro.roteirizacao_id != id:
+        return jsonify({'ok': False, 'msg': 'Passageiro não encontrado'}), 404
+
+    roteiro_destino = RoteiroPlanejado.query.get(roteiro_destino_id)
+    if not roteiro_destino or roteiro_destino.roteirizacao_id != id:
+        return jsonify({'ok': False, 'msg': 'Rota destino não encontrada'}), 404
+
+    parada_origem_id = passageiro.parada_id
+    parada_origem = PontoParada.query.get(parada_origem_id) if parada_origem_id else None
+    roteiro_origem_id = parada_origem.roteiro_id if parada_origem else None
+
+    if roteiro_origem_id == roteiro_destino_id:
+        return jsonify({'ok': False, 'msg': 'Passageiro já está nesta rota'}), 400
+
+    # Criar nova parada na posição do passageiro na rota destino
+    from kml_utils import haversine
+
+    # Número sequencial global para nome da parada
+    max_num = db.session.query(db.func.max(PontoParada.ordem)).filter(
+        PontoParada.roteirizacao_id == id,
+        PontoParada.ativo == True
+    ).scalar() or 0
+
+    # Buscar paradas ativas da rota destino para calcular melhor posição
+    paradas_destino = PontoParada.query.filter(
+        PontoParada.roteiro_id == roteiro_destino_id,
+        PontoParada.ativo == True
+    ).order_by(PontoParada.ordem).all()
+
+    # Encontrar a melhor posição de inserção (menor desvio)
+    melhor_pos = len(paradas_destino)  # Default: final
+    menor_custo = float('inf')
+
+    for i in range(len(paradas_destino) + 1):
+        custo = 0
+        if i > 0:
+            prev = paradas_destino[i - 1]
+            custo += haversine(prev.lat, prev.lng, passageiro.lat, passageiro.lng)
+        if i < len(paradas_destino):
+            nxt = paradas_destino[i]
+            custo += haversine(passageiro.lat, passageiro.lng, nxt.lat, nxt.lng)
+            if i > 0:
+                prev = paradas_destino[i - 1]
+                custo -= haversine(prev.lat, prev.lng, nxt.lat, nxt.lng)
+        else:
+            # Custo de ir até o destino
+            custo += haversine(passageiro.lat, passageiro.lng, rot.destino_lat, rot.destino_lng)
+            if i > 0:
+                prev = paradas_destino[i - 1]
+                custo -= haversine(prev.lat, prev.lng, rot.destino_lat, rot.destino_lng)
+
+        if custo < menor_custo:
+            menor_custo = custo
+            melhor_pos = i
+
+    # Definir ordem: inserir na posição ótima
+    if paradas_destino and melhor_pos < len(paradas_destino):
+        nova_ordem = paradas_destino[melhor_pos].ordem
+        # Empurrar as paradas seguintes
+        for p in paradas_destino[melhor_pos:]:
+            p.ordem = p.ordem + 1
+    elif paradas_destino:
+        nova_ordem = paradas_destino[-1].ordem + 1
+    else:
+        nova_ordem = 1
+
+    nova_parada = PontoParada(
+        roteirizacao_id=id,
+        nome=f'Parada {max_num + 1}',
+        endereco_referencia=passageiro.endereco_completo() or passageiro.endereco_formatado,
+        lat=passageiro.lat,
+        lng=passageiro.lng,
+        roteiro_id=roteiro_destino_id,
+        ordem=nova_ordem,
+        total_passageiros=1,
+        ativo=True
+    )
+    db.session.add(nova_parada)
+    db.session.flush()  # Para obter o ID da nova parada
+
+    # Atualizar passageiro para a nova parada
+    passageiro.parada_id = nova_parada.id
+    passageiro.distancia_ate_parada = 0  # Parada criada na posição do passageiro
+
+    db.session.flush()
+
+    # Recalcular total_passageiros na parada de origem
+    if parada_origem:
+        parada_origem.total_passageiros = parada_origem.passageiros.filter_by(ativo=True).count()
+        # Se a parada de origem ficou sem passageiros, desativar
+        if parada_origem.total_passageiros == 0:
+            parada_origem.ativo = False
+
+    # Recalcular total_passageiros nos roteiros
+    if roteiro_origem_id:
+        roteiro_origem = RoteiroPlanejado.query.get(roteiro_origem_id)
+        if roteiro_origem:
+            roteiro_origem.total_passageiros = sum(
+                p.total_passageiros or 0 for p in PontoParada.query.filter(
+                    PontoParada.roteiro_id == roteiro_origem_id,
+                    PontoParada.ativo == True
+                ).all()
+            )
+
+    roteiro_destino.total_passageiros = sum(
+        p.total_passageiros or 0 for p in PontoParada.query.filter(
+            PontoParada.roteiro_id == roteiro_destino_id,
+            PontoParada.ativo == True
+        ).all()
+    )
+
+    db.session.commit()
+
+    # Paradas atualizadas da rota destino (com ordens recalculadas)
+    paradas_destino_atualizadas = [{
+        'id': p.id, 'ordem': p.ordem
+    } for p in PontoParada.query.filter(
+        PontoParada.roteiro_id == roteiro_destino_id,
+        PontoParada.ativo == True
+    ).order_by(PontoParada.ordem).all()]
+
+    return jsonify({
+        'ok': True,
+        'msg': 'Passageiro movido com sucesso!',
+        'passageiro_id': passageiro_id,
+        'parada_origem_id': parada_origem_id,
+        'parada_origem_vazia': parada_origem.total_passageiros == 0 if parada_origem else True,
+        'nova_parada': {
+            'id': nova_parada.id,
+            'lat': nova_parada.lat,
+            'lng': nova_parada.lng,
+            'nome': nova_parada.nome,
+            'ordem': nova_parada.ordem,
+            'total': nova_parada.total_passageiros,
+            'roteiroId': roteiro_destino_id
+        },
+        'paradas_destino_atualizadas': paradas_destino_atualizadas,
+        'roteiro_origem_id': roteiro_origem_id,
+        'roteiro_destino_id': roteiro_destino_id,
+        'total_pass_origem': roteiro_destino.total_passageiros if roteiro_origem_id is None else RoteiroPlanejado.query.get(roteiro_origem_id).total_passageiros if roteiro_origem_id else 0,
+        'total_pass_destino': roteiro_destino.total_passageiros
+    })
+
+
+# ============================================
+# SALVAR POLYLINES RECALCULADAS (após mover paradas/passageiros)
+# ============================================
+
+@roteirizador_bp.route('/<int:id>/salvar_polylines', methods=['POST'])
+@roteirizador_required
+def salvar_polylines(id):
+    rot = Roteirizacao.query.get_or_404(id)
+    data = request.get_json()
+
+    if not data or 'rotas' not in data:
+        return jsonify({'ok': False, 'msg': 'Dados inválidos'}), 400
+
+    dwell = current_app.config.get('ROTEIRIZADOR_DWELL_TIME', 60)
+
+    for rota_data in data['rotas']:
+        roteiro_id = rota_data.get('roteiro_id')
+        polyline = rota_data.get('polyline', '')
+        legs = rota_data.get('legs', [])
+
+        roteiro = RoteiroPlanejado.query.get(roteiro_id)
+        if not roteiro or roteiro.roteirizacao_id != id:
+            continue
+
+        roteiro.polyline_encoded = polyline
+
+        total_dist_m = sum(l.get('distance_m', 0) for l in legs)
+        total_dur_s = sum(l.get('duration_s', 0) for l in legs)
+        roteiro.distancia_km = round(total_dist_m / 1000, 2)
+        roteiro.duracao_minutos = round(total_dur_s / 60)
+
+        # Recalcular horários
+        if roteiro.tipo == 'volta' and rot.horario_saida_retorno:
+            schedule = rutils.calcular_horarios_volta(legs, rot.horario_saida_retorno, dwell)
+            if schedule:
+                roteiro.horario_saida = rot.horario_saida_retorno
+        else:
+            schedule = rutils.calcular_horarios(legs, rot.horario_chegada, dwell)
+            if schedule:
+                roteiro.horario_saida = schedule[0]['chegada']
+
+        # Atualizar posição e horários das paradas
+        waypoints = rota_data.get('waypoints', [])
+        paradas = roteiro.paradas.filter_by(ativo=True).order_by(PontoParada.ordem).all()
+
+        if waypoints:
+            # Waypoints do drag-and-drop: atualizar posição e ordem
+            for seq, wp in enumerate(waypoints, start=1):
+                parada_id = wp.get('parada_id')
+                parada = PontoParada.query.get(parada_id) if parada_id else None
+                if parada and parada.roteirizacao_id == id:
+                    parada.lat = wp['lat']
+                    parada.lng = wp['lng']
+                    parada.ordem = seq
+                    if seq - 1 < len(schedule):
+                        parada.horario_chegada = schedule[seq - 1]['chegada']
+                        parada.horario_partida = schedule[seq - 1]['partida']
+                    if parada.horario_partida:
+                        tempo_veiculo = rutils.calcular_tempo_veiculo(
+                            seq, parada.horario_partida, rot.horario_chegada
+                        )
+                        for passageiro in parada.passageiros.filter_by(ativo=True).all():
+                            passageiro.tempo_no_veiculo = tempo_veiculo
+        else:
+            # Sem waypoints: só atualizar horários
+            for seq, parada in enumerate(paradas):
+                if seq < len(schedule):
+                    parada.horario_chegada = schedule[seq]['chegada']
+                    parada.horario_partida = schedule[seq]['partida']
+                    if parada.horario_partida:
+                        tempo_veiculo = rutils.calcular_tempo_veiculo(
+                            seq + 1, parada.horario_partida, rot.horario_chegada
+                        )
+                        for passageiro in parada.passageiros.filter_by(ativo=True).all():
+                            passageiro.tempo_no_veiculo = tempo_veiculo
+
+    # Recalcular totais
+    todos_roteiros = rot.roteiros.filter_by(ativo=True).all()
+    rot.distancia_total_km = round(sum(r.distancia_km or 0 for r in todos_roteiros), 2)
+    rot.duracao_total_minutos = round(max((r.duracao_minutos or 0) for r in todos_roteiros))
+
+    db.session.commit()
+    return jsonify({'ok': True, 'msg': 'Rotas salvas com sucesso!'})
+
+
+# ============================================
+# SALVAR COMO SIMULAÇÃO (a partir do editor de mapa)
+# ============================================
+
+@roteirizador_bp.route('/<int:id>/salvar_simulacao_mapa', methods=['POST'])
+@roteirizador_required
+def salvar_simulacao_mapa(id):
+    rot = Roteirizacao.query.get_or_404(id)
+
+    # Primeiro salvar polylines se enviadas
+    data = request.get_json()
+    if data and 'rotas' in data:
+        dwell = current_app.config.get('ROTEIRIZADOR_DWELL_TIME', 60)
+        for rota_data in data['rotas']:
+            roteiro_id = rota_data.get('roteiro_id')
+            polyline = rota_data.get('polyline', '')
+            legs = rota_data.get('legs', [])
+
+            roteiro = RoteiroPlanejado.query.get(roteiro_id)
+            if not roteiro or roteiro.roteirizacao_id != id:
+                continue
+
+            roteiro.polyline_encoded = polyline
+            total_dist_m = sum(l.get('distance_m', 0) for l in legs)
+            total_dur_s = sum(l.get('duration_s', 0) for l in legs)
+            roteiro.distancia_km = round(total_dist_m / 1000, 2)
+            roteiro.duracao_minutos = round(total_dur_s / 60)
+
+            if roteiro.tipo == 'volta' and rot.horario_saida_retorno:
+                schedule = rutils.calcular_horarios_volta(legs, rot.horario_saida_retorno, dwell)
+                if schedule:
+                    roteiro.horario_saida = rot.horario_saida_retorno
+            else:
+                schedule = rutils.calcular_horarios(legs, rot.horario_chegada, dwell)
+                if schedule:
+                    roteiro.horario_saida = schedule[0]['chegada']
+
+            paradas = roteiro.paradas.filter_by(ativo=True).order_by(PontoParada.ordem).all()
+            for seq, parada in enumerate(paradas):
+                if seq < len(schedule):
+                    parada.horario_chegada = schedule[seq]['chegada']
+                    parada.horario_partida = schedule[seq]['partida']
+
+        todos_roteiros = rot.roteiros.filter_by(ativo=True).all()
+        rot.distancia_total_km = round(sum(r.distancia_km or 0 for r in todos_roteiros), 2)
+        rot.duracao_total_minutos = round(max((r.duracao_minutos or 0) for r in todos_roteiros))
+
+    # Salvar como simulação
+    _salvar_simulacao(rot)
+    db.session.commit()
+
+    return jsonify({'ok': True, 'msg': 'Simulação salva com sucesso!'})
 
 
 # ============================================

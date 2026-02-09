@@ -124,7 +124,7 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     senha_hash = db.Column(db.String(256), nullable=False)
     tipo = db.Column(db.String(20), nullable=False, default='cliente_externo')
-    # tipos: admin, atendente, cliente_interno, cliente_externo
+    # tipos: admin, gestor, atendente, cliente_interno, cliente_externo
     empresa = db.Column(db.String(150))  # Para clientes externos
     departamento = db.Column(db.String(100))
     telefone = db.Column(db.String(20))
@@ -150,14 +150,17 @@ class User(UserMixin, db.Model):
     def is_admin(self):
         return self.tipo == 'admin'
 
+    def is_gestor(self):
+        return self.tipo == 'gestor'
+
     def is_atendente(self):
-        return self.tipo in ['admin', 'atendente']
+        return self.tipo in ['admin', 'gestor', 'atendente']
 
     def is_cliente(self):
         return self.tipo in ['cliente_interno', 'cliente_externo']
 
     def pode_ver_categoria(self, categoria_id):
-        """Verifica se o atendente pode ver chamados de uma categoria"""
+        """Verifica se o atendente/gestor pode ver chamados de uma categoria"""
         if self.is_admin():
             return True
         if not self.is_atendente():

@@ -52,8 +52,8 @@ def lista():
     # Clientes só veem seus próprios chamados
     if current_user.is_cliente():
         query = query.filter(Ticket.cliente_id == current_user.id)
-    # Atendentes (não admin) só veem chamados das suas categorias
-    elif current_user.tipo == 'atendente':
+    # Atendentes e gestores (não admin) só veem chamados das suas categorias
+    elif current_user.tipo in ['atendente', 'gestor']:
         categorias_ids = current_user.get_categorias_ids()
         if categorias_ids:
             # Filtrar por categorias atribuídas ou tickets sem categoria
@@ -76,10 +76,10 @@ def lista():
 
     # Filtros disponíveis baseados no tipo de usuário
     if current_user.is_admin():
-        atendentes = User.query.filter(User.tipo.in_(['admin', 'atendente']), User.ativo == True).all()
+        atendentes = User.query.filter(User.tipo.in_(['admin', 'gestor', 'atendente']), User.ativo == True).all()
         categorias = Category.query.filter_by(ativo=True).all()
-    elif current_user.tipo == 'atendente':
-        # Atendente vê apenas ele mesmo no filtro
+    elif current_user.tipo in ['atendente', 'gestor']:
+        # Atendente/Gestor vê apenas ele mesmo no filtro
         atendentes = [current_user]
         # Apenas suas categorias
         categorias_ids = current_user.get_categorias_ids()
@@ -196,12 +196,12 @@ def visualizar(id):
         return redirect(url_for('tickets.lista'))
 
     # Atendentes só podem ver chamados das suas categorias
-    if current_user.tipo == 'atendente' and ticket.categoria_id:
+    if current_user.tipo in ['atendente', 'gestor'] and ticket.categoria_id:
         if not current_user.pode_ver_categoria(ticket.categoria_id):
             flash('Você não tem permissão para visualizar este chamado.', 'danger')
             return redirect(url_for('tickets.lista'))
 
-    atendentes = User.query.filter(User.tipo.in_(['admin', 'atendente']), User.ativo == True).all()
+    atendentes = User.query.filter(User.tipo.in_(['admin', 'gestor', 'atendente']), User.ativo == True).all()
     return render_template('tickets/view.html', ticket=ticket, atendentes=atendentes)
 
 

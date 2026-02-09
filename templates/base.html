@@ -180,7 +180,7 @@
         {% set ns = namespace(tem_atendimento=false) %}
         {% if current_user.is_admin() or current_user.tipo in ['cliente_interno', 'cliente_externo'] %}
             {% set ns.tem_atendimento = true %}
-        {% elif current_user.tipo == 'atendente' %}
+        {% elif current_user.tipo in ['gestor', 'atendente'] %}
             {% set cats_usuario = current_user.categorias.all() %}
             {% if cats_usuario | length == 0 %}
                 {% set ns.tem_atendimento = true %}
@@ -215,12 +215,14 @@
                 </a>
             </li>
             {% endif %}
-            {% if current_user.is_admin() %}
+            {% if current_user.is_admin() or current_user.is_gestor() %}
             <li class="nav-item">
                 <a class="nav-link {% if request.endpoint == 'users.lista' %}active{% endif %}" href="{{ url_for('users.lista') }}">
                     <i class="bi bi-people"></i> Usuários
                 </a>
             </li>
+            {% endif %}
+            {% if current_user.is_admin() %}
             <li class="nav-item">
                 <a class="nav-link {% if request.endpoint == 'users.categorias' %}active{% endif %}" href="{{ url_for('users.categorias') }}">
                     <i class="bi bi-tags"></i> Categorias

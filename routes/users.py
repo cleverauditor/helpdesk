@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from functools import wraps
-from models import db, User, Category, SLAConfig, Cliente
+from models import db, User, Category, SLAConfig, Cliente, atendente_categoria
 
 users_bp = Blueprint('users', __name__, url_prefix='/usuarios')
 
@@ -16,9 +16,33 @@ def admin_required(f):
     return decorated_function
 
 
+def admin_ou_gestor_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_admin() and not current_user.is_gestor():
+            flash('Acesso restrito a administradores e gestores.', 'danger')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def _gestor_pode_gerenciar(user_alvo):
+    """Verifica se o gestor atual pode gerenciar o usuário alvo."""
+    # Gestor não pode gerenciar admins ou outros gestores
+    if user_alvo.tipo in ['admin', 'gestor']:
+        return False
+    # Gestor só pode gerenciar usuários que compartilham pelo menos 1 categoria
+    gestor_cat_ids = set(current_user.get_categorias_ids())
+    user_cat_ids = set(user_alvo.get_categorias_ids())
+    # Se o usuário não tem categorias, considerar como gerenciável (novo ou sem vínculo)
+    if not user_cat_ids:
+        return True
+    return bool(gestor_cat_ids & user_cat_ids)
+
+
 @users_bp.route('/')
 @login_required
-@admin_required
+@admin_ou_gestor_required
 def lista():
     page = request.args.get('page', 1, type=int)
     per_page = 20
@@ -29,6 +53,28 @@ def lista():
     tipo = request.args.get('tipo')
     ativo = request.args.get('ativo')
     busca = request.args.get('busca', '').strip()
+
+    # Gestor: filtrar apenas usuários das suas categorias (atendentes e clientes)
+    if current_user.is_gestor():
+        gestor_cat_ids = current_user.get_categorias_ids()
+        # Buscar IDs de usuários que compartilham categorias com o gestor
+        if gestor_cat_ids:
+            users_com_categoria = db.session.query(atendente_categoria.c.user_id).filter(
+                atendente_categoria.c.categoria_id.in_(gestor_cat_ids)
+            ).distinct().subquery()
+            query = query.filter(
+                db.and_(
+                    User.tipo.notin_(['admin', 'gestor']),
+                    db.or_(
+                        User.id.in_(db.session.query(users_com_categoria)),
+                        # Incluir usuários sem categoria (para poder vincular)
+                        ~User.id.in_(db.session.query(atendente_categoria.c.user_id).distinct())
+                    )
+                )
+            )
+        else:
+            # Gestor sem categorias não vê ninguém
+            query = query.filter(db.literal(False))
 
     if tipo:
         query = query.filter(User.tipo == tipo)
@@ -44,15 +90,20 @@ def lista():
 
     users = query.order_by(User.nome).paginate(page=page, per_page=per_page, error_out=False)
 
-    return render_template('users/list.html', users=users)
+    return render_template('users/list.html', users=users, is_gestor=current_user.is_gestor())
 
 
 @users_bp.route('/criar', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@admin_ou_gestor_required
 def criar():
-    categorias = Category.query.filter_by(ativo=True).order_by(Category.nome).all()
+    # Gestor só vê suas próprias categorias
+    if current_user.is_gestor():
+        categorias = current_user.categorias.filter_by(ativo=True).order_by(Category.nome).all()
+    else:
+        categorias = Category.query.filter_by(ativo=True).order_by(Category.nome).all()
     clientes = Cliente.query.filter_by(ativo=True).order_by(Cliente.nome).all()
+    is_gestor = current_user.is_gestor()
 
     if request.method == 'POST':
         nome = request.form.get('nome', '').strip()
@@ -62,6 +113,12 @@ def criar():
         cliente_id = request.form.get('cliente_id', type=int)
         departamento = request.form.get('departamento', '').strip()
         telefone = request.form.get('telefone', '').strip()
+
+        # Gestor não pode criar admin ou gestor
+        if is_gestor and tipo in ['admin', 'gestor']:
+            flash('Você não tem permissão para criar este tipo de usuário.', 'danger')
+            return render_template('users/form.html', user=None, categorias=categorias,
+                                   clientes=clientes, is_gestor=is_gestor)
 
         # Validações
         errors = []
@@ -77,7 +134,8 @@ def criar():
         if errors:
             for error in errors:
                 flash(error, 'danger')
-            return render_template('users/form.html', user=None, categorias=categorias, clientes=clientes)
+            return render_template('users/form.html', user=None, categorias=categorias,
+                                   clientes=clientes, is_gestor=is_gestor)
 
         # Buscar nome da empresa pelo cliente selecionado
         empresa = None
@@ -99,9 +157,13 @@ def criar():
         db.session.add(user)
         db.session.flush()
 
-        # Adicionar categorias (atendentes e clientes)
+        # Adicionar categorias (atendentes, gestores e clientes)
         if tipo != 'admin':
             categorias_ids = request.form.getlist('categorias', type=int)
+            # Gestor só pode atribuir suas próprias categorias
+            if is_gestor:
+                gestor_cat_ids = set(current_user.get_categorias_ids())
+                categorias_ids = [cid for cid in categorias_ids if cid in gestor_cat_ids]
             for cat_id in categorias_ids:
                 categoria = Category.query.get(cat_id)
                 if categoria:
@@ -112,20 +174,40 @@ def criar():
         flash(f'Usuário {nome} criado com sucesso!', 'success')
         return redirect(url_for('users.lista'))
 
-    return render_template('users/form.html', user=None, categorias=categorias, clientes=clientes)
+    return render_template('users/form.html', user=None, categorias=categorias,
+                           clientes=clientes, is_gestor=is_gestor)
 
 
 @users_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@admin_ou_gestor_required
 def editar(id):
     user = User.query.get_or_404(id)
-    categorias = Category.query.filter_by(ativo=True).order_by(Category.nome).all()
+    is_gestor = current_user.is_gestor()
+
+    # Gestor só pode editar atendentes e clientes das suas categorias
+    if is_gestor and not _gestor_pode_gerenciar(user):
+        flash('Você não tem permissão para editar este usuário.', 'danger')
+        return redirect(url_for('users.lista'))
+
+    # Gestor só vê suas próprias categorias
+    if is_gestor:
+        categorias = current_user.categorias.filter_by(ativo=True).order_by(Category.nome).all()
+    else:
+        categorias = Category.query.filter_by(ativo=True).order_by(Category.nome).all()
     clientes = Cliente.query.filter_by(ativo=True).order_by(Cliente.nome).all()
 
     if request.method == 'POST':
         user.nome = request.form.get('nome', '').strip()
-        user.tipo = request.form.get('tipo', user.tipo)
+        novo_tipo = request.form.get('tipo', user.tipo)
+
+        # Gestor não pode mudar tipo para admin ou gestor
+        if is_gestor and novo_tipo in ['admin', 'gestor']:
+            flash('Você não tem permissão para definir este tipo de usuário.', 'danger')
+            return render_template('users/form.html', user=user, categorias=categorias,
+                                   clientes=clientes, is_gestor=is_gestor)
+
+        user.tipo = novo_tipo
         user.departamento = request.form.get('departamento', '').strip()
         user.telefone = request.form.get('telefone', '').strip()
         user.ativo = request.form.get('ativo') == '1'
@@ -145,16 +227,28 @@ def editar(id):
         if nova_senha and len(nova_senha) >= 6:
             user.set_senha(nova_senha)
 
-        # Atualizar categorias (atendentes e clientes)
+        # Atualizar categorias (atendentes, gestores e clientes)
         if user.tipo != 'admin':
             categorias_ids = request.form.getlist('categorias', type=int)
-            # Limpar categorias atuais
-            user.categorias = []
-            # Adicionar novas
-            for cat_id in categorias_ids:
-                categoria = Category.query.get(cat_id)
-                if categoria:
-                    user.categorias.append(categoria)
+            if is_gestor:
+                # Gestor só pode atribuir suas próprias categorias
+                # Manter categorias do usuário que não pertencem ao gestor
+                gestor_cat_ids = set(current_user.get_categorias_ids())
+                categorias_ids_validas = [cid for cid in categorias_ids if cid in gestor_cat_ids]
+                # Categorias que o usuário tem mas não são do gestor (manter intocadas)
+                user_cat_ids_fora = [c.id for c in user.categorias.all() if c.id not in gestor_cat_ids]
+                user.categorias = []
+                for cat_id in categorias_ids_validas + user_cat_ids_fora:
+                    categoria = Category.query.get(cat_id)
+                    if categoria:
+                        user.categorias.append(categoria)
+            else:
+                # Admin: limpar e reatribuir
+                user.categorias = []
+                for cat_id in categorias_ids:
+                    categoria = Category.query.get(cat_id)
+                    if categoria:
+                        user.categorias.append(categoria)
         else:
             # Admin não tem restrição de categorias
             user.categorias = []
@@ -164,17 +258,23 @@ def editar(id):
         flash(f'Usuário {user.nome} atualizado!', 'success')
         return redirect(url_for('users.lista'))
 
-    return render_template('users/form.html', user=user, categorias=categorias, clientes=clientes)
+    return render_template('users/form.html', user=user, categorias=categorias,
+                           clientes=clientes, is_gestor=is_gestor)
 
 
 @users_bp.route('/<int:id>/toggle', methods=['POST'])
 @login_required
-@admin_required
+@admin_ou_gestor_required
 def toggle_ativo(id):
     user = User.query.get_or_404(id)
 
     if user.id == current_user.id:
         flash('Você não pode desativar sua própria conta.', 'danger')
+        return redirect(url_for('users.lista'))
+
+    # Gestor só pode ativar/desativar usuários das suas categorias
+    if current_user.is_gestor() and not _gestor_pode_gerenciar(user):
+        flash('Você não tem permissão para alterar este usuário.', 'danger')
         return redirect(url_for('users.lista'))
 
     user.ativo = not user.ativo

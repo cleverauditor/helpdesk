@@ -139,12 +139,12 @@ def create_app():
                 'url': url_for('roteirizador.lista')
             })
 
-        # Administração - admin only
-        if current_user.is_admin():
+        # Administração - admin e gestor
+        if current_user.is_admin() or current_user.is_gestor():
             modulos.append({
-                'nome': 'Administração',
-                'descricao': 'Gerenciamento de usuários, categorias e configurações do sistema.',
-                'icone': 'bi-gear',
+                'nome': 'Gestão de Usuários',
+                'descricao': 'Gerenciamento de usuários' + (', categorias e configurações do sistema.' if current_user.is_admin() else ' das suas categorias.'),
+                'icone': 'bi-people',
                 'cor': '#58595b',
                 'url': url_for('users.lista')
             })

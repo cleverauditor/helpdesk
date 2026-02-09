@@ -14,7 +14,7 @@ def aplicar_filtro_permissao(query):
     if current_user.is_admin():
         # Admin vê tudo
         return query
-    elif current_user.tipo == 'atendente':
+    elif current_user.tipo in ['atendente', 'gestor']:
         # Atendente vê apenas chamados das suas categorias
         categorias_ids = current_user.get_categorias_ids()
         if categorias_ids:
@@ -35,7 +35,7 @@ def aplicar_filtro_permissao(query):
 def index():
     # Filtros disponíveis baseados no tipo de usuário
     if current_user.is_admin():
-        atendentes = User.query.filter(User.tipo.in_(['admin', 'atendente'])).all()
+        atendentes = User.query.filter(User.tipo.in_(['admin', 'gestor', 'atendente'])).all()
         categorias = Category.query.filter_by(ativo=True).all()
         empresas = db.session.query(User.empresa).filter(
             User.tipo == 'cliente_externo',
@@ -43,7 +43,7 @@ def index():
             User.empresa != ''
         ).distinct().order_by(User.empresa).all()
         empresas = [e[0] for e in empresas]
-    elif current_user.tipo == 'atendente':
+    elif current_user.tipo in ['atendente', 'gestor']:
         atendentes = [current_user]  # Só ele mesmo
         # Apenas suas categorias
         categorias_ids = current_user.get_categorias_ids()
@@ -94,7 +94,7 @@ def gerar():
         query = query.filter(Ticket.atendente_id == atendente_id)
     if categoria_id:
         # Verificar se atendente pode ver esta categoria
-        if current_user.tipo == 'atendente':
+        if current_user.tipo in ['atendente', 'gestor']:
             if current_user.pode_ver_categoria(categoria_id):
                 query = query.filter(Ticket.categoria_id == categoria_id)
         else:
@@ -111,7 +111,7 @@ def gerar():
 
     # Filtros disponíveis baseados no tipo de usuário
     if current_user.is_admin():
-        atendentes = User.query.filter(User.tipo.in_(['admin', 'atendente'])).all()
+        atendentes = User.query.filter(User.tipo.in_(['admin', 'gestor', 'atendente'])).all()
         categorias = Category.query.filter_by(ativo=True).all()
         empresas = db.session.query(User.empresa).filter(
             User.tipo == 'cliente_externo',
@@ -119,7 +119,7 @@ def gerar():
             User.empresa != ''
         ).distinct().order_by(User.empresa).all()
         empresas = [e[0] for e in empresas]
-    elif current_user.tipo == 'atendente':
+    elif current_user.tipo in ['atendente', 'gestor']:
         atendentes = [current_user]
         categorias_ids = current_user.get_categorias_ids()
         if categorias_ids:
@@ -233,7 +233,7 @@ def exportar_csv():
     if atendente_id and current_user.is_admin():
         query = query.filter(Ticket.atendente_id == atendente_id)
     if categoria_id:
-        if current_user.tipo == 'atendente':
+        if current_user.tipo in ['atendente', 'gestor']:
             if current_user.pode_ver_categoria(categoria_id):
                 query = query.filter(Ticket.categoria_id == categoria_id)
         else:

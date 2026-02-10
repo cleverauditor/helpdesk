@@ -18,7 +18,8 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 
 from models import (
-    db, Category, Roteirizacao, Passageiro, PontoParada, RoteiroPlanejado, Cliente, TipoVeiculo, Simulacao
+    db, Category, Roteirizacao, Passageiro, PontoParada, RoteiroPlanejado,
+    Cliente, TipoVeiculo, Simulacao, ClienteTurno, PassageiroBase
 )
 import roteirizador_utils as rutils
 
@@ -97,6 +98,8 @@ def criar():
         tempo_max = request.form.get('tempo_maximo_viagem', 90, type=int)
         capacidade = request.form.get('capacidade_veiculo', 44, type=int)
         cliente_id = request.form.get('cliente_id', type=int)
+        turno_id = request.form.get('turno_id', type=int)
+        modo_passageiros = request.form.get('modo_passageiros', 'arquivo')
 
         if not nome or not destino:
             flash('Preencha o nome e o endereço de destino.', 'danger')
@@ -130,10 +133,64 @@ def criar():
             tempo_maximo_viagem=tempo_max,
             capacidade_veiculo=capacidade,
             cliente_id=cliente_id if cliente_id else None,
+            turno_id=turno_id if turno_id else None,
             usuario_id=current_user.id
         )
 
-        # Processar arquivo de passageiros
+        # MODO BASE: usar passageiros cadastrados
+        if modo_passageiros == 'base' and cliente_id and turno_id:
+            passageiros_base = PassageiroBase.query.filter_by(
+                cliente_id=cliente_id,
+                turno_id=turno_id,
+                roteirizacao_vinculada_id=None,
+                ativo=True
+            ).all()
+
+            if not passageiros_base:
+                flash('Nenhum passageiro disponível para este cliente/turno.', 'warning')
+                clientes = Cliente.query.filter_by(ativo=True).order_by(Cliente.nome).all()
+                return render_template('roteirizador/form.html', clientes=clientes)
+
+            db.session.add(rot)
+            db.session.flush()
+
+            count = 0
+            for pb in passageiros_base:
+                passageiro = Passageiro(
+                    roteirizacao_id=rot.id,
+                    passageiro_base_id=pb.id,
+                    nome=pb.nome,
+                    endereco=pb.endereco,
+                    numero=pb.numero,
+                    bairro=pb.bairro,
+                    cidade=pb.cidade,
+                    estado=pb.estado,
+                    cep=pb.cep,
+                    complemento=pb.complemento,
+                    telefone=pb.telefone,
+                    observacoes=pb.observacoes,
+                    lat=pb.lat,
+                    lng=pb.lng,
+                    endereco_formatado=pb.endereco_formatado,
+                    geocode_status=pb.geocode_status if pb.lat else 'pendente',
+                )
+                db.session.add(passageiro)
+                count += 1
+
+            rot.total_passageiros = count
+
+            # Se todos os passageiros já estão geocodificados, avançar status
+            todos_geo = all(p.geocode_status == 'sucesso' for p in rot.passageiros)
+            if todos_geo and count > 0:
+                rot.status = 'geocodificado'
+                flash(f'Roteirização criada com {count} passageiros do cadastro (todos já geocodificados). Pronta para clusterizar!', 'success')
+            else:
+                flash(f'Roteirização criada com {count} passageiros do cadastro.', 'success')
+
+            db.session.commit()
+            return redirect(url_for('roteirizador.visualizar', id=rot.id))
+
+        # MODO ARQUIVO: importar CSV/XLSX (fluxo original)
         arquivo = request.files.get('arquivo')
         if arquivo and arquivo.filename and allowed_import_file(arquivo.filename):
             filename = secure_filename(arquivo.filename)
@@ -219,6 +276,25 @@ def visualizar(id):
     tipos_veiculo = TipoVeiculo.query.filter_by(ativo=True).order_by(TipoVeiculo.capacidade).all()
     simulacoes = rot.simulacoes.order_by(Simulacao.criado_em.desc()).all()
 
+    # Rotas existentes (finalizadas) do mesmo cliente+turno
+    rotas_existentes = []
+    if rot.cliente_id and rot.turno_id:
+        outras = Roteirizacao.query.filter(
+            Roteirizacao.cliente_id == rot.cliente_id,
+            Roteirizacao.turno_id == rot.turno_id,
+            Roteirizacao.status == 'finalizado',
+            Roteirizacao.ativo == True,
+            Roteirizacao.id != rot.id
+        ).all()
+        for outra in outras:
+            for r in outra.roteiros.filter_by(ativo=True, tipo='ida').all():
+                if r.polyline_encoded:
+                    rotas_existentes.append({
+                        'nome': f'{outra.nome} - {r.nome}',
+                        'polyline': r.polyline_encoded,
+                        'roteirizacao_id': outra.id,
+                    })
+
     return render_template('roteirizador/view.html',
                            rot=rot,
                            passageiros=passageiros,
@@ -231,7 +307,8 @@ def visualizar(id):
                            total_pendente=total_pendente,
                            api_key=api_key,
                            tipos_veiculo=tipos_veiculo,
-                           simulacoes=simulacoes)
+                           simulacoes=simulacoes,
+                           rotas_existentes=rotas_existentes)
 
 
 # ============================================
@@ -811,6 +888,14 @@ def finalizar(id):
         return redirect(url_for('roteirizador.visualizar', id=id))
 
     rot.status = 'finalizado'
+
+    # Vincular passageiros base à rota finalizada
+    for passageiro in rot.passageiros.filter_by(ativo=True).all():
+        if passageiro.passageiro_base_id:
+            pb = PassageiroBase.query.get(passageiro.passageiro_base_id)
+            if pb:
+                pb.roteirizacao_vinculada_id = rot.id
+
     db.session.commit()
 
     flash('Roteirização finalizada com sucesso!', 'success')
@@ -863,6 +948,37 @@ def editar_mapa(id):
 
     api_key = current_app.config['GOOGLE_MAPS_API_KEY']
 
+    # Rotas existentes (finalizadas) do mesmo cliente+turno
+    rotas_existentes = []
+    if rot.cliente_id and rot.turno_id:
+        outras = Roteirizacao.query.filter(
+            Roteirizacao.cliente_id == rot.cliente_id,
+            Roteirizacao.turno_id == rot.turno_id,
+            Roteirizacao.status == 'finalizado',
+            Roteirizacao.ativo == True,
+            Roteirizacao.id != rot.id
+        ).all()
+        for outra in outras:
+            for r in outra.roteiros.filter_by(ativo=True, tipo='ida').all():
+                if r.polyline_encoded:
+                    rotas_existentes.append({
+                        'nome': f'{outra.nome} - {r.nome}',
+                        'polyline': r.polyline_encoded,
+                        'roteirizacao_id': outra.id,
+                    })
+
+    # Passageiros disponíveis (não vinculados) do mesmo cliente+turno
+    passageiros_disponiveis = []
+    if rot.cliente_id and rot.turno_id:
+        passageiros_disponiveis = PassageiroBase.query.filter(
+            PassageiroBase.cliente_id == rot.cliente_id,
+            PassageiroBase.turno_id == rot.turno_id,
+            PassageiroBase.roteirizacao_vinculada_id.is_(None),
+            PassageiroBase.ativo == True,
+            PassageiroBase.geocode_status == 'sucesso',
+            PassageiroBase.lat.isnot(None)
+        ).order_by(PassageiroBase.nome).all()
+
     return render_template('roteirizador/editar_mapa.html',
                            rot=rot,
                            roteiros_ida=roteiros_ida,
@@ -870,8 +986,10 @@ def editar_mapa(id):
                            paradas_ida=paradas_ida,
                            paradas_volta=paradas_volta,
                            passageiros=passageiros,
+                           passageiros_disponiveis=passageiros_disponiveis,
                            tem_volta=len(roteiros_volta) > 0,
-                           api_key=api_key)
+                           api_key=api_key,
+                           rotas_existentes=rotas_existentes)
 
 
 # ============================================
@@ -1188,6 +1306,210 @@ def mover_passageiro(id):
         'roteiro_destino_id': roteiro_destino_id,
         'total_pass_origem': roteiro_destino.total_passageiros if roteiro_origem_id is None else RoteiroPlanejado.query.get(roteiro_origem_id).total_passageiros if roteiro_origem_id else 0,
         'total_pass_destino': roteiro_destino.total_passageiros
+    })
+
+
+# ============================================
+# ALOCAR PASSAGEIRO DISPONÍVEL A UMA ROTA
+# ============================================
+
+@roteirizador_bp.route('/<int:id>/alocar_passageiro', methods=['POST'])
+@roteirizador_required
+def alocar_passageiro(id):
+    rot = Roteirizacao.query.get_or_404(id)
+    data = request.get_json()
+
+    if not data:
+        return jsonify({'ok': False, 'msg': 'Dados inválidos'}), 400
+
+    passageiro_base_id = data.get('passageiro_base_id')
+    roteiro_id = data.get('roteiro_id')
+    parada_id = data.get('parada_id')  # Opcional
+    criar_nova = data.get('criar_nova', False)  # Só cria nova parada se explicitamente pedido
+
+    # Validar PassageiroBase
+    pb = PassageiroBase.query.get(passageiro_base_id)
+    if not pb or pb.roteirizacao_vinculada_id is not None:
+        return jsonify({'ok': False, 'msg': 'Passageiro não disponível'}), 404
+    if not pb.lat or not pb.lng:
+        return jsonify({'ok': False, 'msg': 'Passageiro não geocodificado'}), 400
+
+    # Validar roteiro
+    roteiro = RoteiroPlanejado.query.get(roteiro_id)
+    if not roteiro or roteiro.roteirizacao_id != id:
+        return jsonify({'ok': False, 'msg': 'Rota não encontrada'}), 404
+
+    # Criar Passageiro na roteirização (cópia dos dados do PassageiroBase)
+    passageiro = Passageiro(
+        roteirizacao_id=id,
+        passageiro_base_id=pb.id,
+        nome=pb.nome,
+        endereco=pb.endereco,
+        numero=pb.numero,
+        bairro=pb.bairro,
+        cidade=pb.cidade,
+        estado=pb.estado,
+        cep=pb.cep,
+        complemento=pb.complemento,
+        telefone=pb.telefone,
+        observacoes=pb.observacoes,
+        lat=pb.lat,
+        lng=pb.lng,
+        endereco_formatado=pb.endereco_formatado,
+        geocode_status='sucesso',
+    )
+    db.session.add(passageiro)
+    db.session.flush()
+
+    nova_parada_data = None
+    parada_atualizada_data = None
+
+    from kml_utils import haversine
+
+    # Se não tem parada_id e não pediu criar nova, buscar a parada mais próxima automaticamente
+    if not parada_id and not criar_nova:
+        paradas_roteiro = PontoParada.query.filter(
+            PontoParada.roteiro_id == roteiro_id,
+            PontoParada.ativo == True
+        ).all()
+        if paradas_roteiro:
+            menor_dist = float('inf')
+            parada_mais_proxima = None
+            for par in paradas_roteiro:
+                d = haversine(pb.lat, pb.lng, par.lat, par.lng)
+                if d < menor_dist:
+                    menor_dist = d
+                    parada_mais_proxima = par
+            if parada_mais_proxima:
+                parada_id = parada_mais_proxima.id
+
+    if parada_id:
+        # Alocar em parada existente
+        parada = PontoParada.query.get(parada_id)
+        if not parada or parada.roteirizacao_id != id:
+            db.session.rollback()
+            return jsonify({'ok': False, 'msg': 'Parada não encontrada'}), 404
+
+        passageiro.parada_id = parada.id
+        passageiro.distancia_ate_parada = haversine(pb.lat, pb.lng, parada.lat, parada.lng)
+        parada.total_passageiros = (parada.total_passageiros or 0) + 1
+        parada_atualizada_data = {
+            'id': parada.id,
+            'total': parada.total_passageiros
+        }
+    else:
+        # Criar nova parada na posição do passageiro (somente quando explicitamente pedido)
+
+        max_num = db.session.query(db.func.max(PontoParada.ordem)).filter(
+            PontoParada.roteirizacao_id == id,
+            PontoParada.ativo == True
+        ).scalar() or 0
+
+        # Buscar paradas ativas da rota para calcular melhor posição de inserção
+        paradas_roteiro = PontoParada.query.filter(
+            PontoParada.roteiro_id == roteiro_id,
+            PontoParada.ativo == True
+        ).order_by(PontoParada.ordem).all()
+
+        melhor_pos = len(paradas_roteiro)
+        menor_custo = float('inf')
+
+        for i in range(len(paradas_roteiro) + 1):
+            custo = 0
+            if i > 0:
+                prev = paradas_roteiro[i - 1]
+                custo += haversine(prev.lat, prev.lng, pb.lat, pb.lng)
+            if i < len(paradas_roteiro):
+                nxt = paradas_roteiro[i]
+                custo += haversine(pb.lat, pb.lng, nxt.lat, nxt.lng)
+                if i > 0:
+                    prev = paradas_roteiro[i - 1]
+                    custo -= haversine(prev.lat, prev.lng, nxt.lat, nxt.lng)
+            else:
+                custo += haversine(pb.lat, pb.lng, rot.destino_lat, rot.destino_lng)
+                if i > 0:
+                    prev = paradas_roteiro[i - 1]
+                    custo -= haversine(prev.lat, prev.lng, rot.destino_lat, rot.destino_lng)
+
+            if custo < menor_custo:
+                menor_custo = custo
+                melhor_pos = i
+
+        if paradas_roteiro and melhor_pos < len(paradas_roteiro):
+            nova_ordem = paradas_roteiro[melhor_pos].ordem
+            for p in paradas_roteiro[melhor_pos:]:
+                p.ordem = p.ordem + 1
+        elif paradas_roteiro:
+            nova_ordem = paradas_roteiro[-1].ordem + 1
+        else:
+            nova_ordem = 1
+
+        nova_parada = PontoParada(
+            roteirizacao_id=id,
+            nome=f'Parada {max_num + 1}',
+            endereco_referencia=pb.endereco_completo() or pb.endereco_formatado,
+            lat=pb.lat,
+            lng=pb.lng,
+            roteiro_id=roteiro_id,
+            ordem=nova_ordem,
+            total_passageiros=1,
+            ativo=True
+        )
+        db.session.add(nova_parada)
+        db.session.flush()
+
+        passageiro.parada_id = nova_parada.id
+        passageiro.distancia_ate_parada = 0
+
+        nova_parada_data = {
+            'id': nova_parada.id,
+            'lat': nova_parada.lat,
+            'lng': nova_parada.lng,
+            'nome': nova_parada.nome,
+            'ordem': nova_parada.ordem,
+            'total': nova_parada.total_passageiros,
+            'roteiroId': roteiro_id
+        }
+
+    # Vincular PassageiroBase à roteirização
+    pb.roteirizacao_vinculada_id = rot.id
+
+    # Atualizar totais
+    roteiro.total_passageiros = sum(
+        p.total_passageiros or 0 for p in PontoParada.query.filter(
+            PontoParada.roteiro_id == roteiro_id,
+            PontoParada.ativo == True
+        ).all()
+    )
+    rot.total_passageiros = rot.passageiros.filter_by(ativo=True).count()
+
+    db.session.commit()
+
+    # Paradas atualizadas
+    paradas_atualizadas = [{
+        'id': p.id, 'ordem': p.ordem
+    } for p in PontoParada.query.filter(
+        PontoParada.roteiro_id == roteiro_id,
+        PontoParada.ativo == True
+    ).order_by(PontoParada.ordem).all()]
+
+    return jsonify({
+        'ok': True,
+        'msg': f'Passageiro "{pb.nome}" alocado com sucesso!',
+        'passageiro': {
+            'id': passageiro.id,
+            'lat': passageiro.lat,
+            'lng': passageiro.lng,
+            'nome': passageiro.nome,
+            'endereco': passageiro.endereco or '',
+            'paradaId': passageiro.parada_id,
+            'roteiroId': roteiro_id
+        },
+        'nova_parada': nova_parada_data,
+        'parada_atualizada': parada_atualizada_data,
+        'paradas_atualizadas': paradas_atualizadas,
+        'roteiro_id': roteiro_id,
+        'total_pass_roteiro': roteiro.total_passageiros
     })
 
 

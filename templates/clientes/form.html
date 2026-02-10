@@ -150,6 +150,30 @@
     <div class="col-md-4">
         {% if cliente %}
         <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-clock-history"></i> Turnos</span>
+                <a href="{{ url_for('clientes.turnos', id=cliente.id) }}" class="btn btn-sm btn-outline-primary">
+                    Gerenciar
+                </a>
+            </div>
+            <div class="card-body">
+                {% set turnos_cliente = cliente.turnos.filter_by(ativo=True).all() %}
+                {% if turnos_cliente %}
+                <ul class="list-group list-group-flush">
+                    {% for turno in turnos_cliente %}
+                    <li class="list-group-item px-0 d-flex justify-content-between">
+                        <span>{{ turno.nome }}</span>
+                        <small class="text-muted">{{ turno.horario_formatado() }}</small>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted mb-0">Nenhum turno cadastrado.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card mb-3">
             <div class="card-header">
                 <i class="bi bi-signpost-2"></i> Rotas do Cliente
             </div>

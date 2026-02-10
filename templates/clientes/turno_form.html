@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ 'Editar' if turno else 'Novo' }} Turno - {{ cliente.nome }} - Sistemas MaxVia{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2><i class="bi bi-clock-history"></i> {{ 'Editar' if turno else 'Novo' }} Turno</h2>
+        <small class="text-muted">Cliente: {{ cliente.nome }}</small>
+    </div>
+    <a href="{{ url_for('clientes.turnos', id=cliente.id) }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clock"></i> Dados do Turno</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Nome <span class="text-danger">*</span></label>
+                        <input type="text" name="nome" class="form-control" required
+                               value="{{ turno.nome if turno else '' }}"
+                               placeholder="Ex: 1o Turno, Administrativo">
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Horário Início <span class="text-danger">*</span></label>
+                            <input type="time" name="horario_inicio" class="form-control" required
+                                   value="{{ turno.horario_inicio.strftime('%H:%M') if turno else '' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Horário Término <span class="text-danger">*</span></label>
+                            <input type="time" name="horario_termino" class="form-control" required
+                                   value="{{ turno.horario_termino.strftime('%H:%M') if turno else '' }}">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Descrição</label>
+                        <textarea name="descricao" class="form-control" rows="3"
+                                  placeholder="Descrição opcional do turno">{{ turno.descricao if turno and turno.descricao else '' }}</textarea>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> Salvar
+                        </button>
+                        <a href="{{ url_for('clientes.turnos', id=cliente.id) }}" class="btn btn-outline-secondary">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

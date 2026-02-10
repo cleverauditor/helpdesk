@@ -1,7 +1,8 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from functools import wraps
-from models import db, Cliente
+from datetime import time
+from models import db, Cliente, ClienteTurno
 
 clientes_bp = Blueprint('clientes', __name__, url_prefix='/clientes')
 
@@ -143,3 +144,112 @@ def toggle(id):
     flash(f'Cliente {cliente.nome} {status}.', 'success')
 
     return redirect(url_for('clientes.lista'))
+
+
+# ============================================
+# TURNOS POR CLIENTE
+# ============================================
+
+@clientes_bp.route('/<int:id>/turnos')
+@login_required
+@admin_required
+def turnos(id):
+    cliente = Cliente.query.get_or_404(id)
+    turnos = ClienteTurno.query.filter_by(cliente_id=id).order_by(ClienteTurno.horario_inicio).all()
+    return render_template('clientes/turnos.html', cliente=cliente, turnos=turnos)
+
+
+@clientes_bp.route('/<int:id>/turnos/criar', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def criar_turno(id):
+    cliente = Cliente.query.get_or_404(id)
+
+    if request.method == 'POST':
+        nome = request.form.get('nome', '').strip()
+        horario_inicio_str = request.form.get('horario_inicio', '').strip()
+        horario_termino_str = request.form.get('horario_termino', '').strip()
+        descricao = request.form.get('descricao', '').strip()
+
+        if not nome or not horario_inicio_str or not horario_termino_str:
+            flash('Nome e horários são obrigatórios.', 'danger')
+            return render_template('clientes/turno_form.html', cliente=cliente, turno=None)
+
+        try:
+            hi, mi = horario_inicio_str.split(':')
+            hf, mf = horario_termino_str.split(':')
+            horario_inicio = time(int(hi), int(mi))
+            horario_termino = time(int(hf), int(mf))
+        except (ValueError, AttributeError):
+            flash('Formato de horário inválido.', 'danger')
+            return render_template('clientes/turno_form.html', cliente=cliente, turno=None)
+
+        turno = ClienteTurno(
+            cliente_id=id,
+            nome=nome,
+            horario_inicio=horario_inicio,
+            horario_termino=horario_termino,
+            descricao=descricao
+        )
+        db.session.add(turno)
+        db.session.commit()
+
+        flash(f'Turno "{nome}" criado com sucesso!', 'success')
+        return redirect(url_for('clientes.turnos', id=id))
+
+    return render_template('clientes/turno_form.html', cliente=cliente, turno=None)
+
+
+@clientes_bp.route('/<int:id>/turnos/<int:tid>/editar', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def editar_turno(id, tid):
+    cliente = Cliente.query.get_or_404(id)
+    turno = ClienteTurno.query.get_or_404(tid)
+
+    if turno.cliente_id != id:
+        flash('Turno não pertence a este cliente.', 'danger')
+        return redirect(url_for('clientes.turnos', id=id))
+
+    if request.method == 'POST':
+        turno.nome = request.form.get('nome', '').strip()
+        horario_inicio_str = request.form.get('horario_inicio', '').strip()
+        horario_termino_str = request.form.get('horario_termino', '').strip()
+        turno.descricao = request.form.get('descricao', '').strip()
+
+        if not turno.nome or not horario_inicio_str or not horario_termino_str:
+            flash('Nome e horários são obrigatórios.', 'danger')
+            return render_template('clientes/turno_form.html', cliente=cliente, turno=turno)
+
+        try:
+            hi, mi = horario_inicio_str.split(':')
+            hf, mf = horario_termino_str.split(':')
+            turno.horario_inicio = time(int(hi), int(mi))
+            turno.horario_termino = time(int(hf), int(mf))
+        except (ValueError, AttributeError):
+            flash('Formato de horário inválido.', 'danger')
+            return render_template('clientes/turno_form.html', cliente=cliente, turno=turno)
+
+        db.session.commit()
+        flash(f'Turno "{turno.nome}" atualizado!', 'success')
+        return redirect(url_for('clientes.turnos', id=id))
+
+    return render_template('clientes/turno_form.html', cliente=cliente, turno=turno)
+
+
+@clientes_bp.route('/<int:id>/turnos/<int:tid>/toggle', methods=['POST'])
+@login_required
+@admin_required
+def toggle_turno(id, tid):
+    turno = ClienteTurno.query.get_or_404(tid)
+
+    if turno.cliente_id != id:
+        flash('Turno não pertence a este cliente.', 'danger')
+        return redirect(url_for('clientes.turnos', id=id))
+
+    turno.ativo = not turno.ativo
+    db.session.commit()
+
+    status = 'ativado' if turno.ativo else 'desativado'
+    flash(f'Turno "{turno.nome}" {status}.', 'success')
+    return redirect(url_for('clientes.turnos', id=id))

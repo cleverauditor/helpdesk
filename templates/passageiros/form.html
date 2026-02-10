@@ -1,0 +1,220 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ 'Editar' if passageiro else 'Novo' }} Passageiro - Sistemas MaxVia{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>
+        <i class="bi bi-person"></i>
+        {{ 'Editar Passageiro: ' + passageiro.nome if passageiro else 'Novo Passageiro' }}
+    </h2>
+    <a href="{{ url_for('passageiros.lista') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-person-vcard"></i> Dados do Passageiro
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Cliente <span class="text-danger">*</span></label>
+                            <select name="cliente_id" id="cliente_id" class="form-select" required>
+                                <option value="">Selecione</option>
+                                {% for c in clientes %}
+                                <option value="{{ c.id }}"
+                                    {{ 'selected' if passageiro and passageiro.cliente_id == c.id }}>
+                                    {{ c.nome }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Turno <span class="text-danger">*</span></label>
+                            <select name="turno_id" id="turno_id" class="form-select" required>
+                                <option value="">Selecione o cliente primeiro</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Nome <span class="text-danger">*</span></label>
+                        <input type="text" name="nome" class="form-control" required
+                               value="{{ passageiro.nome if passageiro else '' }}">
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label class="form-label">Endereço</label>
+                            <input type="text" name="endereco" class="form-control"
+                                   value="{{ passageiro.endereco if passageiro and passageiro.endereco else '' }}"
+                                   placeholder="Rua/Avenida">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Número</label>
+                            <input type="text" name="numero" class="form-control"
+                                   value="{{ passageiro.numero if passageiro and passageiro.numero else '' }}">
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Bairro</label>
+                            <input type="text" name="bairro" class="form-control"
+                                   value="{{ passageiro.bairro if passageiro and passageiro.bairro else '' }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Cidade</label>
+                            <input type="text" name="cidade" class="form-control"
+                                   value="{{ passageiro.cidade if passageiro and passageiro.cidade else '' }}">
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">UF</label>
+                            <input type="text" name="estado" class="form-control" maxlength="2"
+                                   value="{{ passageiro.estado if passageiro and passageiro.estado else '' }}">
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">CEP</label>
+                            <input type="text" name="cep" class="form-control"
+                                   value="{{ passageiro.cep if passageiro and passageiro.cep else '' }}">
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Complemento</label>
+                            <input type="text" name="complemento" class="form-control"
+                                   value="{{ passageiro.complemento if passageiro and passageiro.complemento else '' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Telefone</label>
+                            <input type="text" name="telefone" class="form-control"
+                                   value="{{ passageiro.telefone if passageiro and passageiro.telefone else '' }}">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Observações</label>
+                        <textarea name="observacoes" class="form-control" rows="2">{{ passageiro.observacoes if passageiro and passageiro.observacoes else '' }}</textarea>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> Salvar
+                        </button>
+                        <a href="{{ url_for('passageiros.lista') }}" class="btn btn-outline-secondary">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        {% if passageiro %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-geo-alt"></i> Geocodificação
+            </div>
+            <div class="card-body">
+                {% if passageiro.geocode_status == 'sucesso' %}
+                <span class="badge bg-success mb-2">Geocodificado</span>
+                <p class="small mb-1"><strong>Lat:</strong> {{ passageiro.lat }}</p>
+                <p class="small mb-0"><strong>Lng:</strong> {{ passageiro.lng }}</p>
+                {% elif passageiro.geocode_status == 'falha' %}
+                <span class="badge bg-danger">Falha na geocodificação</span>
+                {% else %}
+                <span class="badge bg-warning text-dark">Pendente</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-link-45deg"></i> Vínculo com Rota
+            </div>
+            <div class="card-body">
+                {% if passageiro.roteirizacao_vinculada_id %}
+                <span class="badge bg-info mb-2">Vinculado</span>
+                {% if passageiro.roteirizacao_vinculada %}
+                <p class="small mb-1">
+                    <a href="{{ url_for('roteirizador.visualizar', id=passageiro.roteirizacao_vinculada_id) }}">
+                        {{ passageiro.roteirizacao_vinculada.nome }}
+                    </a>
+                </p>
+                {% set passageiro_rot = passageiro.instancias_roteirizacao|selectattr('roteirizacao_id', 'equalto', passageiro.roteirizacao_vinculada_id)|first %}
+                {% if passageiro_rot and passageiro_rot.parada and passageiro_rot.parada.roteiro %}
+                <p class="small text-muted mb-2">{{ passageiro_rot.parada.roteiro.nome }}</p>
+                {% endif %}
+                {% endif %}
+                <form method="POST" action="{{ url_for('passageiros.desvincular', id=passageiro.id) }}"
+                      onsubmit="return confirm('Desvincular passageiro da rota?')">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                        <i class="bi bi-link-45deg"></i> Desvincular
+                    </button>
+                </form>
+                {% else %}
+                <span class="badge bg-secondary">Disponível</span>
+                <p class="small text-muted mb-0">Disponível para nova roteirização.</p>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Informações
+            </div>
+            <div class="card-body small text-muted">
+                <p>Selecione o cliente e turno primeiro.</p>
+                <p class="mb-0">Após o cadastro, o passageiro ficará disponível para roteirizações do turno selecionado.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var currentTurnoId = {{ passageiro.turno_id if passageiro and passageiro.turno_id else 'null' }};
+
+function carregarTurnos(clienteId, selectedId) {
+    var turnoSelect = document.getElementById('turno_id');
+    turnoSelect.innerHTML = '<option value="">Carregando...</option>';
+
+    if (!clienteId) {
+        turnoSelect.innerHTML = '<option value="">Selecione o cliente primeiro</option>';
+        return;
+    }
+
+    fetch('/passageiros/api/turnos?cliente_id=' + clienteId)
+        .then(function(r) { return r.json(); })
+        .then(function(turnos) {
+            turnoSelect.innerHTML = '<option value="">Selecione o turno</option>';
+            turnos.forEach(function(t) {
+                var opt = document.createElement('option');
+                opt.value = t.id;
+                opt.textContent = t.nome + ' (' + t.horario + ')';
+                if (selectedId && t.id == selectedId) opt.selected = true;
+                turnoSelect.appendChild(opt);
+            });
+        });
+}
+
+document.getElementById('cliente_id').addEventListener('change', function() {
+    carregarTurnos(this.value, null);
+});
+
+// Carregar turnos iniciais se editando
+var clienteSelect = document.getElementById('cliente_id');
+if (clienteSelect.value) {
+    carregarTurnos(clienteSelect.value, currentTurnoId);
+}
+</script>
+{% endblock %}

@@ -56,6 +56,8 @@ body { overflow: hidden; }
 .modo-tab:hover { background: #f8f9fa; }
 .modo-tab.active { color: #0d6efd; border-bottom-color: #0d6efd; background: #e8f4f8; }
 .modo-tab.active-volta { color: #198754; border-bottom-color: #198754; background: #d1e7dd; }
+@keyframes pulse-marker { 0%,100% { transform: scale(1); opacity: 0.9; } 50% { transform: scale(1.3); opacity: 1; } }
+.marker-pulse { animation: pulse-marker 1.5s ease-in-out infinite; }
 </style>
 {% endblock %}
 
@@ -87,6 +89,18 @@ body { overflow: hidden; }
         <div id="editInstructions" class="edit-instructions">
             <i class="bi bi-info-circle"></i> Arraste os pontos azuis na rota para ajustar o trajeto.
             Clique numa <strong>parada</strong> ou <strong>passageiro</strong> para mover entre rotas.
+        </div>
+
+        <div id="dispAlert" class="px-3 py-2 border-bottom" style="background:#fff3cd;display:none;">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="bi bi-person-plus-fill text-warning"></i>
+                    <strong id="dispCount">0</strong> <small>disponíveis</small>
+                </div>
+                <button class="btn btn-sm btn-warning" onclick="focarDisponiveis()">
+                    <i class="bi bi-geo-alt"></i> Localizar
+                </button>
+            </div>
         </div>
 
         <div class="panel-body">
@@ -154,6 +168,21 @@ var paradasVoltaData = [
     { id: {{ p.id }}, lat: {{ p.lat }}, lng: {{ p.lng }}, nome: {{ p.nome|tojson }}, ordem: {{ p.ordem|default(0, true)|tojson }}, total: {{ p.total_passageiros }}, roteiroId: {{ p.roteiro_id|default('null', true) }} },
     {% endfor %}
 ];
+
+// Rotas existentes (finalizadas do mesmo cliente+turno)
+var rotasExistentes = [
+    {% for r in rotas_existentes %}
+    { nome: {{ r.nome|tojson }}, polyline: {{ r.polyline|tojson }} },
+    {% endfor %}
+];
+
+// Passageiros disponíveis (não vinculados) para alocação
+var passageirosDisponiveis = [
+    {% for p in passageiros_disponiveis %}
+    { id: {{ p.id }}, lat: {{ p.lat }}, lng: {{ p.lng }}, nome: {{ p.nome|tojson }}, endereco: {{ (p.endereco or '')|tojson }}{% if p.numero %}, numero: {{ p.numero|tojson }}{% endif %} },
+    {% endfor %}
+];
+var dispMarkers = [];
 
 var passageirosData = [
     {% for p in passageiros %}{% if p.lat and p.lng %}
@@ -250,9 +279,14 @@ function limparMapa() {
     passMarkers = [];
     stopMarkers.forEach(function(m) { m.setMap(null); });
     stopMarkers = [];
+    dispMarkers.forEach(function(m) { m.setMap(null); });
+    dispMarkers = [];
 }
 
-function carregarModo() {
+var _preservarVista = false;
+
+function carregarModo(preservarVista) {
+    if (preservarVista) _preservarVista = true;
     limparMapa();
 
     var roteiros = getRoteirosData();
@@ -286,6 +320,36 @@ function carregarModo() {
             passMarkers.push(m);
             bounds.extend({ lat: p.lat, lng: p.lng });
         });
+
+        // Passageiros disponíveis (laranja, para alocação)
+        passageirosDisponiveis.forEach(function(p) {
+            var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="-2 -2 20 20">' +
+                '<circle cx="8" cy="8" r="9" fill="#fd7e14" stroke="white" stroke-width="2"/>' +
+                '<path d="M8 4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z" fill="white"/>' +
+                '<path d="M5 12.5c0-1.5 1.2-2.8 3-2.8s3 1.3 3 2.8" stroke="white" stroke-width="1.3" fill="none"/>' +
+                '<line x1="6" y1="8" x2="10" y2="8" stroke="white" stroke-width="1.2"/>' +
+                '<line x1="8" y1="6" x2="8" y2="10" stroke="white" stroke-width="1.2"/>' +
+                '</svg>';
+            var m = new google.maps.Marker({
+                position: { lat: p.lat, lng: p.lng }, map: map,
+                icon: { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg), scaledSize: new google.maps.Size(30, 30), anchor: new google.maps.Point(15, 15) },
+                title: p.nome + ' (disponível para alocação)',
+                zIndex: 200
+            });
+            m._baseId = p.id;
+            m.addListener('click', function() { abrirInfoAlocar(m, p); });
+            dispMarkers.push(m);
+            bounds.extend({ lat: p.lat, lng: p.lng });
+        });
+
+        // Mostrar/esconder alerta de disponíveis
+        var dispAlert = document.getElementById('dispAlert');
+        if (passageirosDisponiveis.length > 0) {
+            dispAlert.style.display = 'block';
+            document.getElementById('dispCount').textContent = passageirosDisponiveis.length;
+        } else {
+            dispAlert.style.display = 'none';
+        }
     }
 
     // Paradas (ignorar vazias)
@@ -320,7 +384,34 @@ function carregarModo() {
         } catch(e) { console.error('Erro polyline:', e); }
     });
 
-    if (!bounds.getNorthEast().equals(bounds.getSouthWest())) {
+    // Rotas existentes (finalizadas) em cinza
+    rotasExistentes.forEach(function(r) {
+        try {
+            var decoded = google.maps.geometry.encoding.decodePath(r.polyline);
+            new google.maps.Polyline({
+                path: decoded,
+                geodesic: true,
+                strokeColor: '#6c757d',
+                strokeOpacity: 0.5,
+                strokeWeight: 4,
+                map: map,
+                zIndex: 1
+            });
+        } catch(e) { console.error('Erro polyline existente:', e); }
+    });
+
+    // Restaurar posição salva (após alocação) ou fitBounds
+    var savedZoom = sessionStorage.getItem('mapZoom');
+    var savedLat = sessionStorage.getItem('mapLat');
+    if (_preservarVista) {
+        _preservarVista = false;
+    } else if (savedZoom && savedLat) {
+        map.setCenter({ lat: parseFloat(savedLat), lng: parseFloat(sessionStorage.getItem('mapLng')) });
+        map.setZoom(parseInt(savedZoom));
+        sessionStorage.removeItem('mapZoom');
+        sessionStorage.removeItem('mapLat');
+        sessionStorage.removeItem('mapLng');
+    } else if (!bounds.getNorthEast().equals(bounds.getSouthWest())) {
         map.fitBounds(bounds, 50);
     }
 
@@ -435,6 +526,7 @@ function recalcularPolylineRota(roteiroId, callback) {
     var polylines = getPolylinesData();
     var paradasRota = paradas.filter(function(p) { return p.roteiroId === roteiroId && p.total > 0; });
     paradasRota.sort(function(a, b) { return a.ordem - b.ordem; });
+    console.log('recalcularPolyline roteiroId=' + roteiroId + ', paradas=' + paradasRota.length + ', polylines=' + polylines.length);
 
     // Remover polyline antiga deste roteiro
     var polyIdx = polylines.findIndex(function(pl) { return pl.id === roteiroId; });
@@ -458,12 +550,14 @@ function recalcularPolylineRota(roteiroId, callback) {
         origin: origin, destination: destinoPos,
         waypoints: waypoints, travelMode: google.maps.TravelMode.DRIVING
     }, function(result, status) {
+        console.log('Directions API status=' + status);
         if (status === 'OK') {
             var route = result.routes[0];
             var encoded = google.maps.geometry.encoding.encodePath(route.overview_path);
             var roteiros = getRoteirosData();
             var rot = roteiros.find(function(r) { return r.id === roteiroId; });
             var idx = rot ? rot.idx : 0;
+            console.log('Polyline atualizada, polyIdx=' + polyIdx + ', rot encontrado=' + !!rot + ', idx=' + idx);
 
             if (polyIdx >= 0) {
                 polylines[polyIdx].encoded = encoded;
@@ -607,7 +701,7 @@ function moverParada(paradaId) {
             // Recalcular polylines de ambas as rotas afetadas
             recalcularPolylineRota(roteiroOrigemId, function() {
                 recalcularPolylineRota(roteiroDestinoId, function() {
-                    carregarModo();
+                    carregarModo(true);
                 });
             });
         } else {
@@ -676,10 +770,10 @@ function moverPassageiro(passageiroId) {
                 // Se a parada de origem foi removida, recalcular polyline da rota origem também
                 if (data.parada_origem_vazia && data.roteiro_origem_id) {
                     recalcularPolylineRota(data.roteiro_origem_id, function() {
-                        carregarModo();
+                        carregarModo(true);
                     });
                 } else {
-                    carregarModo();
+                    carregarModo(true);
                 }
             });
         } else {
@@ -788,6 +882,182 @@ function selecionarRota(roteiroId, idx) {
             alert('Erro ao carregar rota: ' + status);
         }
     });
+}
+
+// ============================================
+// PASSAGEIROS DISPONÍVEIS - LOCALIZAR
+// ============================================
+
+function focarDisponiveis() {
+    if (dispMarkers.length === 0) return;
+    var b = new google.maps.LatLngBounds();
+    dispMarkers.forEach(function(m) { b.extend(m.getPosition()); });
+    map.fitBounds(b, 80);
+
+    // Efeito de bounce nos marcadores
+    dispMarkers.forEach(function(m) {
+        m.setAnimation(google.maps.Animation.BOUNCE);
+        setTimeout(function() { m.setAnimation(null); }, 2000);
+    });
+}
+
+// ============================================
+// ALOCAR PASSAGEIRO DISPONÍVEL
+// ============================================
+
+function calcDistancia(lat1, lng1, lat2, lng2) {
+    var R = 6371000;
+    var dLat = (lat2 - lat1) * Math.PI / 180;
+    var dLng = (lng2 - lng1) * Math.PI / 180;
+    var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLng/2) * Math.sin(dLng/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function abrirInfoAlocar(marker, passDisp) {
+    if (activeInfoWindow) activeInfoWindow.close();
+
+    var roteiros = getRoteirosData();
+    var paradas = getParadasData();
+
+    // Para cada rota, encontrar a parada mais próxima e ordenar por distância
+    var rotasComDist = [];
+    roteiros.forEach(function(r) {
+        var paradasRota = paradas.filter(function(p) { return p.roteiroId === r.id && p.total > 0; });
+        var menorDist = Infinity;
+        paradasRota.forEach(function(p) {
+            var d = calcDistancia(passDisp.lat, passDisp.lng, p.lat, p.lng);
+            if (d < menorDist) menorDist = d;
+        });
+        rotasComDist.push({ r: r, dist: menorDist });
+    });
+    rotasComDist.sort(function(a, b) { return a.dist - b.dist; });
+
+    var opcoesRotas = '';
+    rotasComDist.forEach(function(item) {
+        var r = item.r;
+        var distTxt = item.dist < Infinity ? Math.round(item.dist) + 'm' : '-';
+        opcoesRotas += '<option value="' + r.id + '">' +
+            r.nome + ' (' + r.totalPass + ' pass. | ' + distTxt + ')</option>';
+    });
+
+    // Paradas da primeira rota (atualizado via JS ao trocar rota)
+    var content = '<div style="min-width:280px;font-size:0.9rem;">' +
+        '<div style="background:#6c757d;color:white;padding:6px 10px;margin:-8px -8px 8px -8px;border-radius:4px 4px 0 0;">' +
+        '<strong><i class="bi bi-person-plus"></i> Alocar Passageiro</strong></div>' +
+        '<strong>' + passDisp.nome + '</strong><br>' +
+        '<small class="text-muted">' + (passDisp.endereco || '') + (passDisp.numero ? ', ' + passDisp.numero : '') + '</small>' +
+        '<hr style="margin:8px 0;">' +
+        '<label style="font-size:0.8rem;font-weight:600;">Rota destino:</label>' +
+        '<select id="selectAlocarRota" class="form-select form-select-sm mt-1" onchange="atualizarParadasAlocar(' + passDisp.id + ')">' +
+        '<option value="">-- Selecione a rota --</option>' + opcoesRotas + '</select>' +
+        '<div id="alocModo" style="display:none;margin-top:8px;">' +
+        '<div class="form-check form-check-inline">' +
+        '<input class="form-check-input" type="radio" name="alocModo" id="alocExistente" value="existente" checked>' +
+        '<label class="form-check-label" for="alocExistente" style="font-size:0.8rem;">Parada existente</label></div>' +
+        '<div class="form-check form-check-inline">' +
+        '<input class="form-check-input" type="radio" name="alocModo" id="alocNova" value="nova">' +
+        '<label class="form-check-label" for="alocNova" style="font-size:0.8rem;">Nova parada</label></div>' +
+        '<div id="selectParadaContainer" style="margin-top:4px;"></div>' +
+        '</div>' +
+        '<button class="btn btn-sm btn-success w-100 mt-2" id="btnAlocar" onclick="alocarPassageiro(' + passDisp.id + ')" style="display:none;">' +
+        '<i class="bi bi-plus-circle"></i> Alocar</button>' +
+        '</div>';
+
+    activeInfoWindow = new google.maps.InfoWindow({ content: content });
+    activeInfoWindow.open(map, marker);
+
+    // Listener para alternar modo
+    google.maps.event.addListenerOnce(activeInfoWindow, 'domready', function() {
+        var radios = document.querySelectorAll('input[name="alocModo"]');
+        radios.forEach(function(r) {
+            r.addEventListener('change', function() {
+                var container = document.getElementById('selectParadaContainer');
+                container.style.display = this.value === 'existente' ? 'block' : 'none';
+            });
+        });
+    });
+}
+
+function atualizarParadasAlocar(baseId) {
+    var roteiroId = parseInt(document.getElementById('selectAlocarRota').value);
+    var modoDiv = document.getElementById('alocModo');
+    var btnAlocar = document.getElementById('btnAlocar');
+
+    if (!roteiroId) {
+        modoDiv.style.display = 'none';
+        btnAlocar.style.display = 'none';
+        return;
+    }
+
+    modoDiv.style.display = 'block';
+    btnAlocar.style.display = 'block';
+
+    // Reset para modo "existente"
+    document.getElementById('alocExistente').checked = true;
+    var container = document.getElementById('selectParadaContainer');
+    container.style.display = 'block';
+
+    // Carregar paradas da rota selecionada, ordenadas por distância (incluir todas ativas)
+    var paradas = getParadasData().filter(function(p) { return p.roteiroId === roteiroId; });
+    var passDisp = passageirosDisponiveis.find(function(p) { return p.id === baseId; });
+
+    // Calcular distância e ordenar
+    var paradasComDist = paradas.map(function(p) {
+        return { p: p, dist: passDisp ? calcDistancia(passDisp.lat, passDisp.lng, p.lat, p.lng) : 0 };
+    }).sort(function(a, b) { return a.dist - b.dist; });
+
+    var html = '<select id="selectAlocarParada" class="form-select form-select-sm">';
+    paradasComDist.forEach(function(item, idx) {
+        var distTxt = Math.round(item.dist) + 'm';
+        html += '<option value="' + item.p.id + '"' + (idx === 0 ? ' selected' : '') + '>' +
+            item.p.nome + ' (' + item.p.total + ' pass. | ' + distTxt + ')</option>';
+    });
+    html += '</select>';
+    container.innerHTML = html;
+}
+
+function alocarPassageiro(baseId) {
+    var roteiroId = parseInt(document.getElementById('selectAlocarRota').value);
+    if (!roteiroId) { alert('Selecione uma rota.'); return; }
+
+    var modo = document.querySelector('input[name="alocModo"]:checked').value;
+    var paradaId = null;
+    if (modo === 'existente') {
+        var sel = document.getElementById('selectAlocarParada');
+        if (!sel || !sel.value) { alert('Selecione uma parada.'); return; }
+        paradaId = parseInt(sel.value);
+    }
+
+    if (activeInfoWindow) { activeInfoWindow.close(); activeInfoWindow = null; }
+
+    var payload = { passageiro_base_id: baseId, roteiro_id: roteiroId };
+    if (modo === 'existente' && paradaId) {
+        payload.parada_id = paradaId;
+    } else if (modo === 'nova') {
+        payload.criar_nova = true;
+    }
+
+    fetch('/roteirizador/' + rotId + '/alocar_passageiro', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            // Salvar posição do mapa e recarregar
+            var c = map.getCenter();
+            sessionStorage.setItem('mapZoom', map.getZoom());
+            sessionStorage.setItem('mapLat', c.lat());
+            sessionStorage.setItem('mapLng', c.lng());
+            window.location.reload();
+        } else {
+            alert('Erro: ' + (data.msg || 'Falha'));
+        }
+    })
+    .catch(function(err) { alert('Erro: ' + err); });
 }
 
 </script>

@@ -41,6 +41,7 @@ def create_app():
     from routes.indicadores import indicadores_bp
     from routes.roteirizador import roteirizador_bp
     from routes.veiculos import veiculos_bp
+    from routes.passageiros import passageiros_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(tickets_bp)
@@ -52,6 +53,7 @@ def create_app():
     app.register_blueprint(indicadores_bp)
     app.register_blueprint(roteirizador_bp)
     app.register_blueprint(veiculos_bp)
+    app.register_blueprint(passageiros_bp)
 
     # Rota raiz - Página de módulos
     @app.route('/')

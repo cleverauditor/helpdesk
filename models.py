@@ -360,6 +360,89 @@ class Cliente(db.Model):
         return f'<Cliente {self.nome}>'
 
 
+class ClienteTurno(db.Model):
+    """Turnos definidos por cliente para organizar passageiros"""
+    __tablename__ = 'cliente_turnos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False)
+    nome = db.Column(db.String(100), nullable=False)
+    horario_inicio = db.Column(db.Time, nullable=False)
+    horario_termino = db.Column(db.Time, nullable=False)
+    descricao = db.Column(db.Text)
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+
+    cliente = db.relationship('Cliente', backref=db.backref('turnos', lazy='dynamic',
+                              order_by='ClienteTurno.horario_inicio'))
+
+    def horario_formatado(self):
+        return f'{self.horario_inicio.strftime("%H:%M")} - {self.horario_termino.strftime("%H:%M")}'
+
+    def __repr__(self):
+        return f'<ClienteTurno {self.nome} - {self.cliente.nome if self.cliente else "?"}>'
+
+
+class PassageiroBase(db.Model):
+    """Cadastro permanente de passageiro vinculado a cliente e turno"""
+    __tablename__ = 'passageiros_base'
+
+    id = db.Column(db.Integer, primary_key=True)
+    cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False)
+    turno_id = db.Column(db.Integer, db.ForeignKey('cliente_turnos.id'), nullable=False)
+
+    nome = db.Column(db.String(200), nullable=False)
+    endereco = db.Column(db.String(500))
+    numero = db.Column(db.String(20))
+    bairro = db.Column(db.String(100))
+    cidade = db.Column(db.String(100))
+    estado = db.Column(db.String(2))
+    cep = db.Column(db.String(10))
+    complemento = db.Column(db.String(200))
+    telefone = db.Column(db.String(20))
+    observacoes = db.Column(db.Text)
+
+    # Geocoding
+    lat = db.Column(db.Float)
+    lng = db.Column(db.Float)
+    endereco_formatado = db.Column(db.String(500))
+    geocode_status = db.Column(db.String(30), default='pendente')
+
+    # Vínculo com rota finalizada (NULL = disponível)
+    roteirizacao_vinculada_id = db.Column(db.Integer, db.ForeignKey('roteirizacoes.id'), nullable=True)
+
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+
+    cliente = db.relationship('Cliente', backref=db.backref('passageiros_base', lazy='dynamic'))
+    turno = db.relationship('ClienteTurno', backref=db.backref('passageiros', lazy='dynamic'))
+    roteirizacao_vinculada = db.relationship('Roteirizacao', backref=db.backref('passageiros_vinculados', lazy='dynamic'))
+
+    def endereco_completo(self):
+        parts = []
+        if self.endereco:
+            parts.append(self.endereco)
+        if self.numero:
+            parts.append(self.numero)
+        if self.bairro:
+            parts.append(self.bairro)
+        if self.cidade:
+            parts.append(self.cidade)
+        if self.estado:
+            parts.append(self.estado)
+        if self.cep:
+            parts.append(self.cep)
+        return ', '.join(parts) if parts else ''
+
+    def esta_vinculado(self):
+        return self.roteirizacao_vinculada_id is not None
+
+    def __repr__(self):
+        return f'<PassageiroBase {self.nome}>'
+
+
 class TipoVeiculo(db.Model):
     """Tipos de veículos com capacidade para roteirização"""
     __tablename__ = 'tipos_veiculo'
@@ -694,6 +777,7 @@ class Roteirizacao(db.Model):
     nome = db.Column(db.String(200), nullable=False)
     descricao = db.Column(db.Text)
     cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'))
+    turno_id = db.Column(db.Integer, db.ForeignKey('cliente_turnos.id'), nullable=True)
 
     # Destino
     destino_endereco = db.Column(db.String(500), nullable=False)
@@ -745,6 +829,7 @@ class Roteirizacao(db.Model):
                                cascade='all, delete-orphan')
     usuario = db.relationship('User', backref='roteirizacoes')
     cliente = db.relationship('Cliente', backref='roteirizacoes')
+    turno = db.relationship('ClienteTurno', backref='roteirizacoes')
 
     simulacoes = db.relationship('Simulacao', backref='roteirizacao', lazy='dynamic',
                                 cascade='all, delete-orphan')
@@ -788,6 +873,7 @@ class Passageiro(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     roteirizacao_id = db.Column(db.Integer, db.ForeignKey('roteirizacoes.id'), nullable=False)
+    passageiro_base_id = db.Column(db.Integer, db.ForeignKey('passageiros_base.id'), nullable=True)
 
     nome = db.Column(db.String(200), nullable=False)
     endereco = db.Column(db.String(500))
@@ -813,6 +899,8 @@ class Passageiro(db.Model):
 
     ativo = db.Column(db.Boolean, default=True)
     criado_em = db.Column(db.DateTime, default=agora_brasil)
+
+    passageiro_base = db.relationship('PassageiroBase', backref='instancias_roteirizacao')
 
     def endereco_completo(self):
         parts = []

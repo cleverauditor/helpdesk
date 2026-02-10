@@ -57,10 +57,10 @@
         }
         .sidebar-brand .logo-container {
             background: #ffffff;
-            padding: 15px;
+            padding: 10px 15px;
         }
         .sidebar-brand img {
-            max-width: 220px;
+            max-width: 100%;
             height: auto;
         }
         .sidebar-brand small {
@@ -172,9 +172,8 @@
     <nav class="sidebar">
         <div class="sidebar-brand">
             <div class="logo-container">
-                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="MaxVia">
+                <img src="{{ url_for('static', filename='img/logo-claro.png') }}" alt="MaxVia Sistemas">
             </div>
-            <small>SISTEMAS</small>
         </div>
         {# Verificar se o usuário tem acesso ao módulo de atendimento #}
         {% set ns = namespace(tem_atendimento=false) %}
@@ -266,6 +265,11 @@
             <li class="nav-item">
                 <a class="nav-link {% if 'roteirizador' in request.endpoint %}active{% endif %}" href="{{ url_for('roteirizador.lista') }}">
                     <i class="bi bi-map"></i> Roteirizador
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if 'passageiros' in request.endpoint %}active{% endif %}" href="{{ url_for('passageiros.lista') }}">
+                    <i class="bi bi-people"></i> Passageiros
                 </a>
             </li>
             <li class="nav-item">

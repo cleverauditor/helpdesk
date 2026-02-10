@@ -54,9 +54,9 @@
 
 <div class="stepper">
     {% for i in range(steps|length) %}
-    <div class="step {% if i < current_idx %}done{% elif i == current_idx %}active{% endif %}">
+    <div class="step {% if i <= current_idx %}done{% elif i == current_idx + 1 and rot.status != 'finalizado' %}active{% endif %}">
         <span class="step-circle">
-            {% if i < current_idx %}<i class="bi bi-check"></i>{% else %}{{ step_icons[i] }}{% endif %}
+            {% if i <= current_idx %}<i class="bi bi-check"></i>{% else %}{{ step_icons[i] }}{% endif %}
         </span>
         <span class="step-label">{{ step_labels[i] }}</span>
     </div>
@@ -76,6 +76,15 @@
     <div class="card-body p-0">
         <div id="map"></div>
     </div>
+    {% if rotas_existentes %}
+    <div class="card-footer">
+        <small>
+            <span class="badge" style="background:#20c997;">&#9644;</span> Rotas novas (atual)
+            &nbsp;&nbsp;
+            <span class="badge" style="background:#6c757d;">&#9644;</span> Rotas existentes ({{ rotas_existentes|length }} finalizadas)
+        </small>
+    </div>
+    {% endif %}
 </div>
 
 <div class="row">
@@ -635,6 +644,13 @@ var roteirosVoltaData = [
     {% endfor %}
 ];
 
+// Rotas existentes (finalizadas do mesmo cliente+turno)
+var rotasExistentes = [
+    {% for r in rotas_existentes %}
+    { nome: {{ r.nome|tojson }}, polyline: {{ r.polyline|tojson }} },
+    {% endfor %}
+];
+
 function initMap() {
     map = new google.maps.Map(document.getElementById('map'), {
         zoom: 12,
@@ -784,6 +800,24 @@ function initMap() {
             });
         } catch(e) {
             console.error('Erro polyline volta:', e);
+        }
+    });
+
+    // Rotas existentes (finalizadas) em cinza
+    rotasExistentes.forEach(function(r) {
+        try {
+            var decoded = google.maps.geometry.encoding.decodePath(r.polyline);
+            new google.maps.Polyline({
+                path: decoded,
+                geodesic: true,
+                strokeColor: '#6c757d',
+                strokeOpacity: 0.5,
+                strokeWeight: 4,
+                map: map,
+                zIndex: 1
+            });
+        } catch(e) {
+            console.error('Erro polyline existente:', e);
         }
     });
 

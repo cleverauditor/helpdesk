@@ -23,14 +23,22 @@
                         <label class="form-label">Nome da Roteirização <span class="text-danger">*</span></label>
                         <input type="text" name="nome" class="form-control" placeholder="Ex: Rota Manhã - Empresa ABC" required>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Cliente</label>
-                        <select name="cliente_id" class="form-select">
-                            <option value="">Selecione (opcional)</option>
-                            {% for c in clientes %}
-                            <option value="{{ c.id }}">{{ c.nome }}</option>
-                            {% endfor %}
-                        </select>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Cliente</label>
+                            <select name="cliente_id" id="cliente_id" class="form-select">
+                                <option value="">Selecione (opcional)</option>
+                                {% for c in clientes %}
+                                <option value="{{ c.id }}">{{ c.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3" id="turno-group" style="display:none;">
+                            <label class="form-label">Turno</label>
+                            <select name="turno_id" id="turno_id" class="form-select">
+                                <option value="">Selecione o turno</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Endereço de Destino <span class="text-danger">*</span></label>
@@ -70,19 +78,52 @@
                 </div>
             </div>
 
+            <!-- Origem dos Passageiros -->
             <div class="card mb-4">
-                <div class="card-header"><h5 class="mb-0"><i class="bi bi-file-earmark-arrow-up"></i> Importar Passageiros</h5></div>
+                <div class="card-header"><h5 class="mb-0"><i class="bi bi-people"></i> Passageiros</h5></div>
                 <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label">Arquivo CSV ou Excel</label>
-                        <input type="file" name="arquivo" class="form-control" accept=".csv,.xlsx,.xls">
-                        <small class="text-muted">Formatos aceitos: CSV, XLSX, XLS</small>
+                    <!-- Modo de seleção -->
+                    <div class="mb-3" id="modo-group" style="display:none;">
+                        <label class="form-label">Origem dos Passageiros</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="modo_passageiros"
+                                   value="base" id="modoBase">
+                            <label class="form-check-label" for="modoBase">
+                                <i class="bi bi-database"></i> Usar passageiros cadastrados
+                                <span class="badge bg-primary" id="count-disponiveis" style="display:none;">0</span>
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="modo_passageiros"
+                                   value="arquivo" id="modoArquivo" checked>
+                            <label class="form-check-label" for="modoArquivo">
+                                <i class="bi bi-file-earmark-arrow-up"></i> Importar arquivo CSV/XLSX
+                            </label>
+                        </div>
                     </div>
-                    <div class="alert alert-info mb-0">
-                        <h6><i class="bi bi-lightbulb"></i> Formato esperado do arquivo:</h6>
-                        <p class="mb-1">O arquivo deve conter pelo menos a coluna <strong>nome</strong>. Colunas opcionais:</p>
-                        <code>nome; endereco; numero; bairro; cidade; estado; cep; telefone</code>
-                        <p class="mt-1 mb-0"><small>O sistema aceita variações nos nomes das colunas (rua, logradouro, uf, etc.)</small></p>
+
+                    <!-- Upload de arquivo -->
+                    <div id="arquivo-group">
+                        <div class="mb-3">
+                            <label class="form-label">Arquivo CSV ou Excel</label>
+                            <input type="file" name="arquivo" id="arquivo_input" class="form-control" accept=".csv,.xlsx,.xls">
+                            <small class="text-muted">Formatos aceitos: CSV, XLSX, XLS</small>
+                        </div>
+                        <div class="alert alert-info mb-0">
+                            <h6><i class="bi bi-lightbulb"></i> Formato esperado do arquivo:</h6>
+                            <p class="mb-1">O arquivo deve conter pelo menos a coluna <strong>nome</strong>. Colunas opcionais:</p>
+                            <code>nome; endereco; numero; bairro; cidade; estado; cep; telefone</code>
+                            <p class="mt-1 mb-0"><small>O sistema aceita variações nos nomes das colunas (rua, logradouro, uf, etc.)</small></p>
+                        </div>
+                    </div>
+
+                    <!-- Info modo base -->
+                    <div id="base-info" style="display:none;">
+                        <div class="alert alert-success mb-0">
+                            <h6><i class="bi bi-check-circle"></i> Passageiros do cadastro</h6>
+                            <p class="mb-1">Serão utilizados <strong id="base-count">0</strong> passageiros disponíveis do cadastro.</p>
+                            <p class="mb-0"><small>Passageiros já geocodificados não precisarão ser geocodificados novamente.</small></p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -117,8 +158,8 @@
             </div>
 
             <div class="d-grid gap-2">
-                <button type="submit" class="btn btn-success btn-lg">
-                    <i class="bi bi-upload"></i> Importar Endereços
+                <button type="submit" class="btn btn-success btn-lg" id="btn-submit">
+                    <i class="bi bi-check-lg"></i> Criar Roteirização
                 </button>
                 <a href="{{ url_for('roteirizador.lista') }}" class="btn btn-outline-secondary">
                     <i class="bi bi-arrow-left"></i> Voltar
@@ -127,4 +168,100 @@
         </div>
     </div>
 </form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var disponiveis = 0;
+
+document.getElementById('cliente_id').addEventListener('change', function() {
+    var clienteId = this.value;
+    var turnoGroup = document.getElementById('turno-group');
+    var modoGroup = document.getElementById('modo-group');
+    var turnoSelect = document.getElementById('turno_id');
+
+    if (!clienteId) {
+        turnoGroup.style.display = 'none';
+        modoGroup.style.display = 'none';
+        toggleModo('arquivo');
+        return;
+    }
+
+    // Carregar turnos
+    turnoGroup.style.display = 'block';
+    turnoSelect.innerHTML = '<option value="">Carregando...</option>';
+
+    fetch('/passageiros/api/turnos?cliente_id=' + clienteId)
+        .then(function(r) { return r.json(); })
+        .then(function(turnos) {
+            turnoSelect.innerHTML = '<option value="">Selecione o turno</option>';
+            turnos.forEach(function(t) {
+                var opt = document.createElement('option');
+                opt.value = t.id;
+                opt.textContent = t.nome + ' (' + t.horario + ')';
+                turnoSelect.appendChild(opt);
+            });
+
+            if (turnos.length === 0) {
+                turnoSelect.innerHTML = '<option value="">Nenhum turno cadastrado</option>';
+                modoGroup.style.display = 'none';
+                toggleModo('arquivo');
+            }
+        });
+});
+
+document.getElementById('turno_id').addEventListener('change', function() {
+    var turnoId = this.value;
+    var clienteId = document.getElementById('cliente_id').value;
+    var modoGroup = document.getElementById('modo-group');
+
+    if (!turnoId || !clienteId) {
+        modoGroup.style.display = 'none';
+        toggleModo('arquivo');
+        return;
+    }
+
+    // Verificar passageiros disponíveis
+    fetch('/passageiros/api/disponiveis?cliente_id=' + clienteId + '&turno_id=' + turnoId)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            disponiveis = data.total;
+            var badge = document.getElementById('count-disponiveis');
+            badge.textContent = data.total + ' disponíveis';
+            document.getElementById('base-count').textContent = data.total;
+
+            if (data.total > 0) {
+                badge.style.display = 'inline';
+                modoGroup.style.display = 'block';
+                // Auto-selecionar modo base se há passageiros
+                document.getElementById('modoBase').checked = true;
+                toggleModo('base');
+            } else {
+                badge.style.display = 'none';
+                modoGroup.style.display = 'none';
+                toggleModo('arquivo');
+            }
+        });
+});
+
+// Alternar entre modo base e arquivo
+document.querySelectorAll('input[name="modo_passageiros"]').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+        toggleModo(this.value);
+    });
+});
+
+function toggleModo(modo) {
+    var arquivoGroup = document.getElementById('arquivo-group');
+    var baseInfo = document.getElementById('base-info');
+
+    if (modo === 'base') {
+        arquivoGroup.style.display = 'none';
+        baseInfo.style.display = 'block';
+    } else {
+        arquivoGroup.style.display = 'block';
+        baseInfo.style.display = 'none';
+    }
+}
+</script>
 {% endblock %}

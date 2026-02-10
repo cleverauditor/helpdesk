@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+
+{% block title %}Importar Passageiros - Sistemas MaxVia{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-upload"></i> Importar Passageiros</h2>
+    <a href="{{ url_for('passageiros.lista') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-file-earmark-spreadsheet"></i> Upload de Arquivo
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Cliente <span class="text-danger">*</span></label>
+                            <select name="cliente_id" id="cliente_id" class="form-select" required>
+                                <option value="">Selecione</option>
+                                {% for c in clientes %}
+                                <option value="{{ c.id }}">{{ c.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Turno <span class="text-danger">*</span></label>
+                            <select name="turno_id" id="turno_id" class="form-select" required>
+                                <option value="">Selecione o cliente primeiro</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Arquivo CSV ou XLSX <span class="text-danger">*</span></label>
+                        <input type="file" name="arquivo" class="form-control" required
+                               accept=".csv,.xlsx,.xls">
+                        <small class="text-muted">Formatos aceitos: CSV, XLSX, XLS</small>
+                    </div>
+
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-upload"></i> Importar
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Formato do Arquivo
+            </div>
+            <div class="card-body small">
+                <p>O arquivo deve conter as seguintes colunas:</p>
+                <ul class="mb-2">
+                    <li><strong>nome</strong> (obrigatório)</li>
+                    <li>endereco / rua / logradouro</li>
+                    <li>numero / num / nro</li>
+                    <li>bairro</li>
+                    <li>cidade / municipio</li>
+                    <li>estado / uf</li>
+                    <li>cep</li>
+                    <li>complemento</li>
+                    <li>telefone / celular</li>
+                    <li>observacoes / obs</li>
+                </ul>
+                <p class="text-muted mb-0">Os nomes das colunas são flexíveis e aceitos em diversas variações.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('cliente_id').addEventListener('change', function() {
+    var clienteId = this.value;
+    var turnoSelect = document.getElementById('turno_id');
+    turnoSelect.innerHTML = '<option value="">Carregando...</option>';
+
+    if (!clienteId) {
+        turnoSelect.innerHTML = '<option value="">Selecione o cliente primeiro</option>';
+        return;
+    }
+
+    fetch('/passageiros/api/turnos?cliente_id=' + clienteId)
+        .then(function(r) { return r.json(); })
+        .then(function(turnos) {
+            turnoSelect.innerHTML = '<option value="">Selecione o turno</option>';
+            turnos.forEach(function(t) {
+                var opt = document.createElement('option');
+                opt.value = t.id;
+                opt.textContent = t.nome + ' (' + t.horario + ')';
+                turnoSelect.appendChild(opt);
+            });
+        });
+});
+</script>
+{% endblock %}

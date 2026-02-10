@@ -55,6 +55,28 @@ def create_app():
     app.register_blueprint(veiculos_bp)
     app.register_blueprint(passageiros_bp)
 
+    # Endpoint de deploy - git pull via API
+    @app.route('/deploy-hook', methods=['POST'])
+    def deploy_hook():
+        import subprocess
+        from flask import request, jsonify
+        secret = request.headers.get('X-Deploy-Secret', '')
+        if secret != os.environ.get('DEPLOY_SECRET', ''):
+            return jsonify({'ok': False, 'msg': 'Unauthorized'}), 403
+        try:
+            result = subprocess.run(
+                ['git', 'pull'],
+                cwd=basedir,
+                capture_output=True, text=True, timeout=30
+            )
+            return jsonify({
+                'ok': result.returncode == 0,
+                'stdout': result.stdout.strip(),
+                'stderr': result.stderr.strip()
+            })
+        except Exception as e:
+            return jsonify({'ok': False, 'msg': str(e)}), 500
+
     # Rota raiz - Página de módulos
     @app.route('/')
     @login_required

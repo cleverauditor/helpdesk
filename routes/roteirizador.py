@@ -7,6 +7,7 @@ import uuid
 import csv
 import io
 import json
+import time as _time
 from functools import wraps
 from datetime import datetime, time, timedelta
 
@@ -527,7 +528,6 @@ def otimizar(id):
         departure_ts = rutils._prox_dia_util_timestamp(partida_estimada.time())
 
     # Timeout global: 240s (PythonAnywhere limita a 300s)
-    import time as _time
     start_time = _time.time()
     TIMEOUT_SECONDS = 240
 

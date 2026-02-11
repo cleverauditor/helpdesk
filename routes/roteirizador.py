@@ -526,9 +526,19 @@ def otimizar(id):
         partida_estimada = datetime.combine(datetime.today(), rot.horario_chegada) - timedelta(minutes=rot.tempo_maximo_viagem or 90)
         departure_ts = rutils._prox_dia_util_timestamp(partida_estimada.time())
 
+    # Timeout global: 240s (PythonAnywhere limita a 300s)
+    import time as _time
+    start_time = _time.time()
+    TIMEOUT_SECONDS = 240
+
     # Para cada grupo de capacidade, otimizar e verificar tempo
     sub_rotas_finais = []
+    timeout_hit = False
     for grupo_clusters in sub_rotas_capacidade:
+        if _time.time() - start_time > TIMEOUT_SECONDS:
+            timeout_hit = True
+            break
+
         paradas_opt = [{'id': c['id'], 'lat': c['lat'], 'lng': c['lng']} for c in grupo_clusters]
         resultado = rutils.otimizar_rota_google(paradas_opt, rot.destino_lat, rot.destino_lng, departure_ts)
 
@@ -615,10 +625,17 @@ def otimizar(id):
     rot.status = 'otimizado'
     db.session.commit()
 
+    elapsed = round(_time.time() - start_time)
     msg_tempo = ''
     if num_roteiros > 1:
         msg_tempo = f' (dividido em {num_roteiros} rotas para respeitar tempo máximo de {rot.tempo_maximo_viagem} min)'
-    flash(f'Otimização concluída: {num_roteiros} rota(s), {round(total_dist, 1)} km total.{msg_tempo}', 'success')
+    if timeout_hit:
+        rotas_restantes = len(sub_rotas_capacidade) - len(sub_rotas_finais)
+        flash(f'Otimização parcial ({elapsed}s): {num_roteiros} rota(s) processadas. '
+              f'{rotas_restantes} grupo(s) não processado(s) por timeout. '
+              f'Tente "Recalcular" para as rotas restantes.', 'warning')
+    else:
+        flash(f'Otimização concluída ({elapsed}s): {num_roteiros} rota(s), {round(total_dist, 1)} km total.{msg_tempo}', 'success')
     return redirect(url_for('roteirizador.visualizar', id=id))
 
 

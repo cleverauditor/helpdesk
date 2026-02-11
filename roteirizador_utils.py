@@ -564,14 +564,15 @@ def dividir_rotas_por_capacidade(clusters, capacidade):
     return rotas
 
 
-def dividir_rotas_por_tempo(grupo_clusters, resultado_otimizacao, tempo_max_min, destino_lat, destino_lng, departure_timestamp=None):
+def dividir_rotas_por_tempo(grupo_clusters, resultado_otimizacao, tempo_max_min, destino_lat, destino_lng, departure_timestamp=None, _depth=0):
     """
     Após otimização, verifica se a duração excede o tempo máximo.
     Se sim, divide as paradas em sub-grupos e re-otimiza cada um.
+    Profundidade máxima de recursão: 3 (evita timeout com muitos passageiros).
     Retorna lista de (paradas_list, resultado_otimizacao) por sub-rota.
     """
     dur = resultado_otimizacao['total_duration_min']
-    if dur <= tempo_max_min:
+    if dur <= tempo_max_min or _depth >= 3:
         return [(grupo_clusters, resultado_otimizacao)]
 
     # Dividir as paradas na ordem otimizada em dois grupos
@@ -599,8 +600,7 @@ def dividir_rotas_por_tempo(grupo_clusters, resultado_otimizacao, tempo_max_min,
         paradas_opt = [{'id': c['id'], 'lat': c['lat'], 'lng': c['lng']} for c in g]
         res = otimizar_rota_google(paradas_opt, destino_lat, destino_lng, departure_timestamp)
         if res and 'error' not in res:
-            # Recursivamente verificar se sub-rota ainda excede tempo
-            sub = dividir_rotas_por_tempo(g, res, tempo_max_min, destino_lat, destino_lng, departure_timestamp)
+            sub = dividir_rotas_por_tempo(g, res, tempo_max_min, destino_lat, destino_lng, departure_timestamp, _depth + 1)
             resultados.extend(sub)
         else:
             resultados.append((g, res))
@@ -772,7 +772,7 @@ def _directions_chunked(paradas, destino_lat, destino_lng, chunk_size, departure
     for i, chunk in enumerate(chunks):
         # Delay entre chunks para evitar rate limiting
         if i > 0:
-            time.sleep(0.5)
+            time.sleep(0.2)
 
         if i < len(chunks) - 1:
             # Destino intermediário = primeira parada do próximo chunk

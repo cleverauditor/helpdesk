@@ -525,8 +525,8 @@ def otimizar(id):
         paradas_opt = [{'id': c['id'], 'lat': c['lat'], 'lng': c['lng']} for c in grupo_clusters]
         resultado = rutils.otimizar_rota_google(paradas_opt, rot.destino_lat, rot.destino_lng, departure_ts)
 
-        if not resultado:
-            sub_rotas_finais.append((grupo_clusters, None))
+        if not resultado or 'error' in resultado:
+            sub_rotas_finais.append((grupo_clusters, resultado))
             continue
 
         # Dividir por tempo máximo se necessário
@@ -543,8 +543,9 @@ def otimizar(id):
     ordem_global = 0  # Numeração sequencial global de paradas (1, 2, 3, 4, 5...)
 
     for r_idx, (grupo_clusters, resultado) in enumerate(sub_rotas_finais, start=1):
-        if not resultado:
-            flash(f'Erro ao otimizar rota {r_idx}. Verifique a chave da API.', 'danger')
+        if not resultado or 'error' in resultado:
+            error_detail = resultado.get('error', 'Resposta vazia') if resultado else 'Sem resposta da API'
+            flash(f'Erro ao otimizar rota {r_idx}: {error_detail}', 'danger')
             continue
 
         # Criar roteiro planejado
@@ -813,8 +814,9 @@ def gerar_retorno(id):
         # Otimizar rota de volta (destino como origem)
         resultado = rutils.otimizar_rota_google_volta(paradas_data, rot.destino_lat, rot.destino_lng, departure_ts_volta)
 
-        if not resultado:
-            flash(f'Erro ao otimizar volta {r_idx}. Verifique a API.', 'danger')
+        if not resultado or 'error' in resultado:
+            error_detail = resultado.get('error', 'Resposta vazia') if resultado else 'Sem resposta da API'
+            flash(f'Erro ao otimizar volta {r_idx}: {error_detail}', 'danger')
             continue
 
         # Calcular horários progressivos

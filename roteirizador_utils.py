@@ -598,12 +598,12 @@ def dividir_rotas_por_tempo(grupo_clusters, resultado_otimizacao, tempo_max_min,
             continue
         paradas_opt = [{'id': c['id'], 'lat': c['lat'], 'lng': c['lng']} for c in g]
         res = otimizar_rota_google(paradas_opt, destino_lat, destino_lng, departure_timestamp)
-        if res:
+        if res and 'error' not in res:
             # Recursivamente verificar se sub-rota ainda excede tempo
             sub = dividir_rotas_por_tempo(g, res, tempo_max_min, destino_lat, destino_lng, departure_timestamp)
             resultados.extend(sub)
         else:
-            resultados.append((g, None))
+            resultados.append((g, res))
 
     return resultados
 
@@ -618,9 +618,10 @@ def otimizar_rota_google(paradas, destino_lat, destino_lng, departure_timestamp=
     paradas: lista de dicts com 'lat', 'lng', 'id'
     departure_timestamp: Unix timestamp para trânsito (opcional)
     Retorna: dict com waypoint_order, legs, total_distance_km, total_duration_min, polyline
+             ou dict com 'error' em caso de falha
     """
     if not GOOGLE_MAPS_API_KEY or not paradas:
-        return None
+        return {'error': 'Chave da API não configurada ou sem paradas'}
 
     # Google Directions suporta max 25 waypoints
     MAX_WAYPOINTS = 23  # 25 - origin - destination
@@ -633,7 +634,7 @@ def otimizar_rota_google(paradas, destino_lat, destino_lng, departure_timestamp=
 
 
 def _directions_request(paradas, destino_lat, destino_lng, departure_timestamp=None):
-    """Faz uma requisição à Directions API."""
+    """Faz uma requisição à Directions API com retry para rate limiting."""
     if len(paradas) == 1:
         origin = f"{paradas[0]['lat']},{paradas[0]['lng']}"
         params = {
@@ -671,15 +672,24 @@ def _directions_request(paradas, destino_lat, destino_lng, departure_timestamp=N
         params['traffic_model'] = 'best_guess'
 
     try:
-        resp = requests.get(
-            'https://maps.googleapis.com/maps/api/directions/json',
-            params=params,
-            timeout=30
-        )
-        data = resp.json()
+        # Retry com backoff para rate limiting
+        max_retries = 3
+        for attempt in range(max_retries):
+            resp = requests.get(
+                'https://maps.googleapis.com/maps/api/directions/json',
+                params=params,
+                timeout=30
+            )
+            data = resp.json()
 
-        if data['status'] != 'OK':
-            return None
+            if data['status'] == 'OK':
+                break
+            elif data['status'] in ('OVER_QUERY_LIMIT', 'UNKNOWN_ERROR') and attempt < max_retries - 1:
+                time.sleep(2 * (attempt + 1))
+                continue
+            else:
+                error_msg = data.get('error_message', data['status'])
+                return {'error': f"{data['status']}: {error_msg}"}
 
         route = data['routes'][0]
         legs = []
@@ -721,8 +731,8 @@ def _directions_request(paradas, destino_lat, destino_lng, departure_timestamp=N
             'polyline': route['overview_polyline']['points']
         }
 
-    except Exception:
-        return None
+    except Exception as e:
+        return {'error': f'Exceção: {str(e)}'}
 
 
 def _directions_chunked(paradas, destino_lat, destino_lng, chunk_size, departure_timestamp=None):
@@ -741,6 +751,10 @@ def _directions_chunked(paradas, destino_lat, destino_lng, chunk_size, departure
     chunks = [paradas_sorted[i:i+chunk_size] for i in range(0, len(paradas_sorted), chunk_size)]
 
     for i, chunk in enumerate(chunks):
+        # Delay entre chunks para evitar rate limiting
+        if i > 0:
+            time.sleep(0.5)
+
         if i < len(chunks) - 1:
             # Destino intermediário = primeira parada do próximo chunk
             next_start = chunks[i + 1][0]
@@ -749,13 +763,15 @@ def _directions_chunked(paradas, destino_lat, destino_lng, chunk_size, departure
             # Último chunk: destino final
             result = _directions_request(chunk, destino_lat, destino_lng, departure_timestamp)
 
-        if result:
+        if result and 'error' not in result:
             reordered = [chunk[j] for j in result['waypoint_order']] if result['waypoint_order'] else chunk
             full_order.extend(reordered)
             all_legs.extend(result['legs'])
             total_dist += result['total_distance_km']
             total_dur += result['total_duration_min']
             polylines.append(result['polyline'])
+        elif result and 'error' in result:
+            return result  # Propagar erro
 
     # Mapear ordem de volta para IDs originais
     order_ids = []
@@ -832,7 +848,7 @@ def otimizar_rota_google_volta(paradas, origem_lat, origem_lng, departure_timest
     departure_timestamp: Unix timestamp para trânsito (opcional)
     """
     if not GOOGLE_MAPS_API_KEY or not paradas:
-        return None
+        return {'error': 'Chave da API não configurada ou sem paradas'}
 
     if len(paradas) == 1:
         # Apenas uma parada: destino → parada
@@ -870,15 +886,24 @@ def otimizar_rota_google_volta(paradas, origem_lat, origem_lng, departure_timest
         params['traffic_model'] = 'best_guess'
 
     try:
-        resp = requests.get(
-            'https://maps.googleapis.com/maps/api/directions/json',
-            params=params,
-            timeout=30
-        )
-        data = resp.json()
+        # Retry com backoff para rate limiting
+        max_retries = 3
+        for attempt in range(max_retries):
+            resp = requests.get(
+                'https://maps.googleapis.com/maps/api/directions/json',
+                params=params,
+                timeout=30
+            )
+            data = resp.json()
 
-        if data['status'] != 'OK':
-            return None
+            if data['status'] == 'OK':
+                break
+            elif data['status'] in ('OVER_QUERY_LIMIT', 'UNKNOWN_ERROR') and attempt < max_retries - 1:
+                time.sleep(2 * (attempt + 1))
+                continue
+            else:
+                error_msg = data.get('error_message', data['status'])
+                return {'error': f"{data['status']}: {error_msg}"}
 
         route = data['routes'][0]
         legs = []
@@ -920,8 +945,8 @@ def otimizar_rota_google_volta(paradas, origem_lat, origem_lng, departure_timest
             'polyline': route['overview_polyline']['points']
         }
 
-    except Exception:
-        return None
+    except Exception as e:
+        return {'error': f'Exceção: {str(e)}'}
 
 
 def calcular_horarios_volta(legs, horario_saida, dwell_time_seconds=60):

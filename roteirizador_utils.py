@@ -633,8 +633,8 @@ def otimizar_rota_google(paradas, destino_lat, destino_lng, departure_timestamp=
         return _directions_chunked(paradas, destino_lat, destino_lng, MAX_WAYPOINTS, departure_timestamp)
 
 
-def _directions_request(paradas, destino_lat, destino_lng, departure_timestamp=None):
-    """Faz uma requisição à Directions API com retry para rate limiting."""
+def _build_directions_params(paradas, destino_lat, destino_lng, departure_timestamp=None):
+    """Monta os parâmetros para a Directions API."""
     if len(paradas) == 1:
         origin = f"{paradas[0]['lat']},{paradas[0]['lng']}"
         params = {
@@ -645,7 +645,6 @@ def _directions_request(paradas, destino_lat, destino_lng, departure_timestamp=N
             'key': GOOGLE_MAPS_API_KEY
         }
     else:
-        # Usar a parada mais distante do destino como origin
         farthest_idx = max(
             range(len(paradas)),
             key=lambda i: haversine(paradas[i]['lat'], paradas[i]['lng'], destino_lat, destino_lng)
@@ -666,10 +665,16 @@ def _directions_request(paradas, destino_lat, destino_lng, departure_timestamp=N
             'key': GOOGLE_MAPS_API_KEY
         }
 
-    # Adicionar departure_time para considerar trânsito
     if departure_timestamp:
         params['departure_time'] = departure_timestamp
         params['traffic_model'] = 'best_guess'
+
+    return params
+
+
+def _directions_request(paradas, destino_lat, destino_lng, departure_timestamp=None):
+    """Faz uma requisição à Directions API com retry e fallbacks."""
+    params = _build_directions_params(paradas, destino_lat, destino_lng, departure_timestamp)
 
     try:
         # Retry com backoff para rate limiting
@@ -687,6 +692,20 @@ def _directions_request(paradas, destino_lat, destino_lng, departure_timestamp=N
             elif data['status'] in ('OVER_QUERY_LIMIT', 'UNKNOWN_ERROR') and attempt < max_retries - 1:
                 time.sleep(2 * (attempt + 1))
                 continue
+            elif data['status'] == 'ZERO_RESULTS' and departure_timestamp:
+                # Fallback: tentar sem departure_time (pode ser data passada)
+                params_sem_traffic = {k: v for k, v in params.items()
+                                      if k not in ('departure_time', 'traffic_model')}
+                resp = requests.get(
+                    'https://maps.googleapis.com/maps/api/directions/json',
+                    params=params_sem_traffic,
+                    timeout=30
+                )
+                data = resp.json()
+                if data['status'] == 'OK':
+                    break
+                error_msg = data.get('error_message', data['status'])
+                return {'error': f"{data['status']}: {error_msg}"}
             else:
                 error_msg = data.get('error_message', data['status'])
                 return {'error': f"{data['status']}: {error_msg}"}
@@ -901,6 +920,20 @@ def otimizar_rota_google_volta(paradas, origem_lat, origem_lng, departure_timest
             elif data['status'] in ('OVER_QUERY_LIMIT', 'UNKNOWN_ERROR') and attempt < max_retries - 1:
                 time.sleep(2 * (attempt + 1))
                 continue
+            elif data['status'] == 'ZERO_RESULTS' and departure_timestamp:
+                # Fallback: tentar sem departure_time
+                params_sem_traffic = {k: v for k, v in params.items()
+                                      if k not in ('departure_time', 'traffic_model')}
+                resp = requests.get(
+                    'https://maps.googleapis.com/maps/api/directions/json',
+                    params=params_sem_traffic,
+                    timeout=30
+                )
+                data = resp.json()
+                if data['status'] == 'OK':
+                    break
+                error_msg = data.get('error_message', data['status'])
+                return {'error': f"{data['status']}: {error_msg}"}
             else:
                 error_msg = data.get('error_message', data['status'])
                 return {'error': f"{data['status']}: {error_msg}"}

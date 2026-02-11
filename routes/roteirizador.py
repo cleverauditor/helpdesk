@@ -498,17 +498,24 @@ def otimizar(id):
         p.horario_chegada = None
         p.horario_partida = None
 
-    # Dividir por capacidade se necessário
+    # Dividir por capacidade se necessário (filtrar paradas sem coordenadas válidas)
     clusters_data = []
+    paradas_invalidas = 0
     for p in paradas:
-        clusters_data.append({
-            'id': p.id,
-            'lat': p.lat,
-            'lng': p.lng,
-            'centroid_lat': p.lat,
-            'centroid_lng': p.lng,
-            'passageiro_ids': [px.id for px in p.passageiros.filter_by(ativo=True).all()]
-        })
+        if p.lat and p.lng and -90 <= p.lat <= 90 and -180 <= p.lng <= 180:
+            clusters_data.append({
+                'id': p.id,
+                'lat': p.lat,
+                'lng': p.lng,
+                'centroid_lat': p.lat,
+                'centroid_lng': p.lng,
+                'passageiro_ids': [px.id for px in p.passageiros.filter_by(ativo=True).all()]
+            })
+        else:
+            paradas_invalidas += 1
+
+    if paradas_invalidas:
+        flash(f'{paradas_invalidas} parada(s) ignorada(s) por coordenadas inválidas.', 'warning')
 
     sub_rotas_capacidade = rutils.dividir_rotas_por_capacidade(clusters_data, rot.capacidade_veiculo)
 

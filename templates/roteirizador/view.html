@@ -99,9 +99,9 @@
                 <div class="alert alert-info">
                     <h6><i class="bi bi-info-circle"></i> Próximo passo: Geocodificar</h6>
                     <p class="mb-2">Converta os endereços dos passageiros em coordenadas geográficas.</p>
-                    <form method="POST" action="{{ url_for('roteirizador.geocodificar', id=rot.id) }}">
-                        <button class="btn btn-primary"><i class="bi bi-geo-alt-fill"></i> Geocodificar Endereços ({{ total_pendente }} pendentes)</button>
-                    </form>
+                    <button class="btn btn-primary" type="button" onclick="iniciarOperacao('geocodificar')">
+                        <i class="bi bi-geo-alt-fill"></i> Geocodificar Endereços ({{ total_pendente }} pendentes)
+                    </button>
                 </div>
 
                 {% elif rot.status == 'geocodificado' %}
@@ -862,7 +862,8 @@ var pollingInterval = null;
 var rotId = {{ rot.id }};
 
 function iniciarOperacao(tipo) {
-    var titulo = tipo === 'clusterizar' ? 'Clusterizando Passageiros' : 'Otimizando Rota';
+    var titulos = {'geocodificar': 'Geocodificando Endereços', 'clusterizar': 'Clusterizando Passageiros', 'otimizar': 'Otimizando Rota'};
+    var titulo = titulos[tipo] || 'Processando...';
     document.getElementById('progressoTitulo').innerHTML = '<i class="bi bi-hourglass-split"></i> ' + titulo;
     document.getElementById('progressoEtapa').textContent = 'Iniciando...';
     document.getElementById('progressoBar').style.width = '0%';
@@ -975,7 +976,8 @@ function pararPolling() {
     .then(function(resp) { return resp.json(); })
     .then(function(data) {
         if (data.status === 'running') {
-            var titulo = data.operacao === 'clusterizar' ? 'Clusterizando Passageiros' : 'Otimizando Rota';
+            var titulos = {'geocodificar': 'Geocodificando Endereços', 'clusterizar': 'Clusterizando Passageiros', 'otimizar': 'Otimizando Rota'};
+            var titulo = titulos[data.operacao] || 'Processando...';
             document.getElementById('progressoTitulo').innerHTML = '<i class="bi bi-hourglass-split"></i> ' + titulo;
             progressoModal = new bootstrap.Modal(document.getElementById('progressoModal'));
             progressoModal.show();

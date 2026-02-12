@@ -399,7 +399,11 @@ def editar_passageiro(id, pid):
 @roteirizador_required
 def geocodificar(id):
     rot = Roteirizacao.query.get_or_404(id)
-    rutils.init_api_key(current_app.config['GOOGLE_MAPS_API_KEY'])
+
+    # Verificar se já tem operação em andamento
+    prog = _progresso_store.get(id)
+    if prog and prog.get('status') == 'running':
+        return jsonify({'ok': False, 'msg': 'Operação já em andamento.'}), 409
 
     passageiros = rot.passageiros.filter(
         Passageiro.ativo == True,
@@ -410,32 +414,72 @@ def geocodificar(id):
         if rot.status == 'rascunho':
             rot.status = 'geocodificado'
             db.session.commit()
-        flash('Todos os passageiros já foram geocodificados.', 'info')
-        return redirect(url_for('roteirizador.visualizar', id=id))
+        return jsonify({'ok': False, 'msg': 'Todos os passageiros já foram geocodificados.'}), 400
 
-    # Preparar dados para geocodificação em lote
+    # Gravar progresso inicial em memória
+    inicio = _time.time()
+    _progresso_store[id] = {
+        'operacao': 'geocodificar', 'status': 'running',
+        'etapa': 'Iniciando geocodificação...', 'percentual': 0, 'inicio': inicio
+    }
+
+    # Lançar thread em background
+    app = current_app._get_current_object()
+    api_key = current_app.config['GOOGLE_MAPS_API_KEY']
     dados = [{'id': p.id, 'endereco_completo': p.endereco_completo()} for p in passageiros]
-    resultados = rutils.geocode_lote(dados, delay=0.1)
+    thread = threading.Thread(target=_geocodificar_background, args=(app, id, api_key, dados, inicio), daemon=True)
+    thread.start()
 
-    sucesso = 0
-    falha = 0
-    for r in resultados:
-        p = Passageiro.query.get(r['id'])
-        if p:
-            p.lat = r['lat']
-            p.lng = r['lng']
-            p.endereco_formatado = r['endereco_formatado']
-            p.geocode_status = r['status']
-            if r['status'] == 'sucesso':
-                sucesso += 1
-            else:
-                falha += 1
+    return jsonify({'ok': True, 'msg': 'Geocodificação iniciada.'})
 
-    rot.status = 'geocodificado'
-    db.session.commit()
 
-    flash(f'Geocodificação concluída: {sucesso} sucesso, {falha} falhas.', 'success' if falha == 0 else 'warning')
-    return redirect(url_for('roteirizador.visualizar', id=id))
+def _geocodificar_background(app, rot_id, api_key, dados, inicio):
+    """Executa geocodificação em lote em background com atualizações de progresso."""
+    with app.app_context():
+        try:
+            rutils.init_api_key(api_key)
+            total = len(dados)
+            sucesso = 0
+            falha = 0
+
+            for i, p_data in enumerate(dados, start=1):
+                _atualizar_progresso(app, rot_id, {
+                    'operacao': 'geocodificar', 'status': 'running',
+                    'etapa': f'Geocodificando {i} de {total}...',
+                    'percentual': int(90 * i / total), 'inicio': inicio
+                })
+
+                resultado = rutils.geocode_endereco(p_data['endereco_completo'])
+                p = Passageiro.query.get(p_data['id'])
+                if p:
+                    p.lat = resultado['lat']
+                    p.lng = resultado['lng']
+                    p.endereco_formatado = resultado['endereco_formatado']
+                    p.geocode_status = resultado['status']
+                    if resultado['status'] == 'sucesso':
+                        sucesso += 1
+                    else:
+                        falha += 1
+
+            rot = db.session.get(Roteirizacao, rot_id)
+            rot.status = 'geocodificado'
+            db.session.commit()
+
+            flash_msg = f'Geocodificação concluída: {sucesso} sucesso, {falha} falhas.'
+            flash_cat = 'success' if falha == 0 else 'warning'
+            _progresso_store[rot_id] = {
+                'operacao': 'geocodificar', 'status': 'completed',
+                'etapa': 'Concluído!', 'percentual': 100, 'inicio': inicio,
+                'resultado_flash': {'msg': flash_msg, 'cat': flash_cat}
+            }
+
+        except Exception as e:
+            db.session.rollback()
+            _progresso_store[rot_id] = {
+                'operacao': 'geocodificar', 'status': 'error',
+                'etapa': 'Erro na geocodificação', 'percentual': 0, 'inicio': inicio,
+                'erro': str(e)
+            }
 
 
 # ============================================

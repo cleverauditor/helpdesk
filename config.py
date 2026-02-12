@@ -10,11 +10,15 @@ class Config:
         'sqlite:///' + os.path.join(os.path.dirname(os.path.abspath(__file__)), 'helpdesk.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Reconexão automática para MySQL (PythonAnywhere)
-    SQLALCHEMY_ENGINE_OPTIONS = {
+    _db_uri = os.environ.get('DATABASE_URL') or ''
+    _engine_opts = {
         'pool_recycle': 280,  # Recicla conexões antes do timeout do MySQL (300s)
-        'pool_pre_ping': True,  # Verifica conexão antes de usar
-        'connect_args': {'check_same_thread': False}  # SQLite threading
+        'pool_pre_ping': True  # Verifica conexão antes de usar
     }
+    # SQLite precisa de check_same_thread=False para funcionar com threads
+    if 'sqlite' in _db_uri or not _db_uri:
+        _engine_opts['connect_args'] = {'check_same_thread': False}
+    SQLALCHEMY_ENGINE_OPTIONS = _engine_opts
 
     # Upload
     UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')

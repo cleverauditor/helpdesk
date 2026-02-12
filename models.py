@@ -820,6 +820,9 @@ class Roteirizacao(db.Model):
     criado_em = db.Column(db.DateTime, default=agora_brasil)
     atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
 
+    # Progresso de operações longas (clusterização/otimização)
+    progresso_json = db.Column(db.Text, default=None)
+
     # Relacionamentos
     passageiros = db.relationship('Passageiro', backref='roteirizacao', lazy='dynamic',
                                   cascade='all, delete-orphan')

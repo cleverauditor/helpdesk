@@ -12,7 +12,8 @@ class Config:
     # Reconexão automática para MySQL (PythonAnywhere)
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_recycle': 280,  # Recicla conexões antes do timeout do MySQL (300s)
-        'pool_pre_ping': True  # Verifica conexão antes de usar
+        'pool_pre_ping': True,  # Verifica conexão antes de usar
+        'connect_args': {'check_same_thread': False}  # SQLite threading
     }
 
     # Upload

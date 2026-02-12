@@ -186,6 +186,13 @@ def create_app():
     # Criar tabelas e dados iniciais
     with app.app_context():
         db.create_all()
+        # Migration segura: adicionar progresso_json se não existir
+        try:
+            db.session.execute(db.text("SELECT progresso_json FROM roteirizacoes LIMIT 1"))
+        except Exception:
+            db.session.rollback()
+            db.session.execute(db.text("ALTER TABLE roteirizacoes ADD COLUMN progresso_json TEXT"))
+            db.session.commit()
         init_data()
 
     return app

@@ -7,6 +7,7 @@ import uuid
 import csv
 import io
 import json
+import threading
 import time as _time
 from functools import wraps
 from datetime import datetime, time, timedelta
@@ -48,6 +49,47 @@ def roteirizador_required(f):
 def allowed_import_file(filename):
     allowed = current_app.config.get('ALLOWED_IMPORT_EXTENSIONS', {'csv', 'xlsx', 'xls'})
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed
+
+
+# ============================================
+# PROGRESSO DE OPERAÇÕES LONGAS
+# ============================================
+
+def _atualizar_progresso(app, rot_id, dados):
+    """Atualiza o campo progresso_json de uma roteirização."""
+    with app.app_context():
+        rot = db.session.get(Roteirizacao, rot_id)
+        if rot:
+            rot.progresso_json = json.dumps(dados, ensure_ascii=False)
+            db.session.commit()
+
+
+@roteirizador_bp.route('/<int:id>/progresso')
+@roteirizador_required
+def progresso(id):
+    rot = Roteirizacao.query.get_or_404(id)
+    if rot.progresso_json:
+        data = json.loads(rot.progresso_json)
+        if data.get('inicio'):
+            elapsed = _time.time() - data['inicio']
+            data['elapsed'] = round(elapsed)
+            # Detecção de operação abandonada (servidor reiniciou)
+            if data.get('status') == 'running' and elapsed > 300:
+                data['status'] = 'error'
+                data['erro'] = 'Operação expirou. Tente novamente.'
+                rot.progresso_json = None
+                db.session.commit()
+        return jsonify(data)
+    return jsonify({'status': 'idle'})
+
+
+@roteirizador_bp.route('/<int:id>/progresso/limpar', methods=['POST'])
+@roteirizador_required
+def limpar_progresso(id):
+    rot = Roteirizacao.query.get_or_404(id)
+    rot.progresso_json = None
+    db.session.commit()
+    return jsonify({'ok': True})
 
 
 # ============================================
@@ -409,70 +451,126 @@ def geocodificar(id):
 @roteirizador_required
 def clusterizar(id):
     rot = Roteirizacao.query.get_or_404(id)
-    rutils.init_api_key(current_app.config['GOOGLE_MAPS_API_KEY'])
 
-    # Resetar atribuições dos passageiros (antes de deletar paradas)
-    for p in rot.passageiros.filter_by(ativo=True).all():
-        p.parada_id = None
-        p.distancia_ate_parada = None
-        p.tempo_no_veiculo = None
-    db.session.flush()
-    # Limpar paradas e roteiros anteriores
-    PontoParada.query.filter_by(roteirizacao_id=id).delete()
-    RoteiroPlanejado.query.filter_by(roteirizacao_id=id).delete()
+    # Verificar se já tem operação em andamento
+    if rot.progresso_json:
+        prog = json.loads(rot.progresso_json)
+        if prog.get('status') == 'running':
+            return jsonify({'ok': False, 'msg': 'Operação já em andamento.'}), 409
 
-    # Pegar passageiros geocodificados
-    passageiros = rot.passageiros.filter(
+    # Validar passageiros
+    total_geo = rot.passageiros.filter(
         Passageiro.ativo == True,
         Passageiro.geocode_status.in_(['sucesso', 'manual']),
         Passageiro.lat.isnot(None)
-    ).all()
+    ).count()
 
-    if not passageiros:
-        flash('Nenhum passageiro geocodificado para agrupar.', 'danger')
-        return redirect(url_for('roteirizador.visualizar', id=id))
+    if not total_geo:
+        return jsonify({'ok': False, 'msg': 'Nenhum passageiro geocodificado para agrupar.'}), 400
 
-    # Preparar dados
-    dados = [{'id': p.id, 'lat': p.lat, 'lng': p.lng} for p in passageiros]
-
-    # Calcular timestamp de partida estimado para rota-tronco (trânsito)
-    departure_ts = None
-    if rot.horario_chegada:
-        partida_estimada = datetime.combine(datetime.today(), rot.horario_chegada) - timedelta(minutes=rot.tempo_maximo_viagem or 90)
-        departure_ts = rutils._prox_dia_util_timestamp(partida_estimada.time())
-
-    # Clusterizar
-    clusters = rutils.clusterizar_passageiros(dados, rot.distancia_maxima_caminhada, rot.destino_lat, rot.destino_lng, departure_ts)
-
-    # Criar pontos de parada
-    for i, cluster in enumerate(clusters, start=1):
-        # Reverse geocode para referência
-        endereco_ref = rutils.reverse_geocode(cluster['centroid_lat'], cluster['centroid_lng'])
-
-        parada = PontoParada(
-            roteirizacao_id=id,
-            nome=f'Parada {i}',
-            endereco_referencia=endereco_ref,
-            lat=cluster['centroid_lat'],
-            lng=cluster['centroid_lng'],
-            total_passageiros=len(cluster['passageiro_ids'])
-        )
-        db.session.add(parada)
-        db.session.flush()
-
-        # Atribuir passageiros à parada
-        for pid in cluster['passageiro_ids']:
-            p = Passageiro.query.get(pid)
-            if p:
-                p.parada_id = parada.id
-                p.distancia_ate_parada = cluster['distancias'].get(pid, 0)
-
-    rot.total_paradas = len(clusters)
-    rot.status = 'clusterizado'
+    # Gravar progresso inicial
+    inicio = _time.time()
+    rot.progresso_json = json.dumps({
+        'operacao': 'clusterizar', 'status': 'running',
+        'etapa': 'Iniciando clusterização...', 'percentual': 0, 'inicio': inicio
+    }, ensure_ascii=False)
     db.session.commit()
 
-    flash(f'{len(clusters)} pontos de parada criados.', 'success')
-    return redirect(url_for('roteirizador.visualizar', id=id))
+    # Lançar thread em background
+    app = current_app._get_current_object()
+    api_key = current_app.config['GOOGLE_MAPS_API_KEY']
+    thread = threading.Thread(target=_clusterizar_background, args=(app, id, api_key, inicio), daemon=True)
+    thread.start()
+
+    return jsonify({'ok': True, 'msg': 'Clusterização iniciada.'})
+
+
+def _clusterizar_background(app, rot_id, api_key, inicio):
+    """Executa clusterização em background com atualizações de progresso."""
+    with app.app_context():
+        try:
+            rutils.init_api_key(api_key)
+            rot = db.session.get(Roteirizacao, rot_id)
+
+            # Etapa 1: Resetar
+            _atualizar_progresso(app, rot_id, {
+                'operacao': 'clusterizar', 'status': 'running',
+                'etapa': 'Resetando atribuições anteriores...', 'percentual': 5, 'inicio': inicio
+            })
+            for p in rot.passageiros.filter_by(ativo=True).all():
+                p.parada_id = None
+                p.distancia_ate_parada = None
+                p.tempo_no_veiculo = None
+            db.session.flush()
+            PontoParada.query.filter_by(roteirizacao_id=rot_id).delete()
+            RoteiroPlanejado.query.filter_by(roteirizacao_id=rot_id).delete()
+
+            # Etapa 2: Clusterizar
+            _atualizar_progresso(app, rot_id, {
+                'operacao': 'clusterizar', 'status': 'running',
+                'etapa': 'Calculando rota-tronco e agrupando paradas...', 'percentual': 15, 'inicio': inicio
+            })
+            passageiros = rot.passageiros.filter(
+                Passageiro.ativo == True,
+                Passageiro.geocode_status.in_(['sucesso', 'manual']),
+                Passageiro.lat.isnot(None)
+            ).all()
+            dados = [{'id': p.id, 'lat': p.lat, 'lng': p.lng} for p in passageiros]
+
+            departure_ts = None
+            if rot.horario_chegada:
+                partida_estimada = datetime.combine(datetime.today(), rot.horario_chegada) - timedelta(minutes=rot.tempo_maximo_viagem or 90)
+                departure_ts = rutils._prox_dia_util_timestamp(partida_estimada.time())
+
+            clusters = rutils.clusterizar_passageiros(dados, rot.distancia_maxima_caminhada, rot.destino_lat, rot.destino_lng, departure_ts)
+
+            # Etapa 3: Criar paradas com reverse geocode
+            total_clusters = len(clusters)
+            for i, cluster in enumerate(clusters, start=1):
+                _atualizar_progresso(app, rot_id, {
+                    'operacao': 'clusterizar', 'status': 'running',
+                    'etapa': f'Geocodificando parada {i} de {total_clusters}...',
+                    'percentual': 30 + int(60 * i / total_clusters), 'inicio': inicio
+                })
+                endereco_ref = rutils.reverse_geocode(cluster['centroid_lat'], cluster['centroid_lng'])
+                parada = PontoParada(
+                    roteirizacao_id=rot_id,
+                    nome=f'Parada {i}',
+                    endereco_referencia=endereco_ref,
+                    lat=cluster['centroid_lat'],
+                    lng=cluster['centroid_lng'],
+                    total_passageiros=len(cluster['passageiro_ids'])
+                )
+                db.session.add(parada)
+                db.session.flush()
+                for pid in cluster['passageiro_ids']:
+                    p = Passageiro.query.get(pid)
+                    if p:
+                        p.parada_id = parada.id
+                        p.distancia_ate_parada = cluster['distancias'].get(pid, 0)
+
+            # Etapa 4: Finalizar
+            rot.total_paradas = total_clusters
+            rot.status = 'clusterizado'
+            rot.progresso_json = json.dumps({
+                'operacao': 'clusterizar', 'status': 'completed',
+                'etapa': 'Concluído!', 'percentual': 100, 'inicio': inicio,
+                'resultado_flash': {'msg': f'{total_clusters} pontos de parada criados.', 'cat': 'success'}
+            }, ensure_ascii=False)
+            db.session.commit()
+
+        except Exception as e:
+            try:
+                rot = db.session.get(Roteirizacao, rot_id)
+                if rot:
+                    rot.progresso_json = json.dumps({
+                        'operacao': 'clusterizar', 'status': 'error',
+                        'etapa': 'Erro na clusterização', 'percentual': 0, 'inicio': inicio,
+                        'erro': str(e)
+                    }, ensure_ascii=False)
+                    db.session.commit()
+            except Exception:
+                pass
 
 
 # ============================================
@@ -483,160 +581,207 @@ def clusterizar(id):
 @roteirizador_required
 def otimizar(id):
     rot = Roteirizacao.query.get_or_404(id)
-    rutils.init_api_key(current_app.config['GOOGLE_MAPS_API_KEY'])
+
+    # Verificar se já tem operação em andamento
+    if rot.progresso_json:
+        prog = json.loads(rot.progresso_json)
+        if prog.get('status') == 'running':
+            return jsonify({'ok': False, 'msg': 'Operação já em andamento.'}), 409
 
     paradas = rot.paradas.filter_by(ativo=True).all()
-
     if not paradas:
-        flash('Nenhum ponto de parada. Execute a clusterização primeiro.', 'danger')
-        return redirect(url_for('roteirizador.visualizar', id=id))
+        return jsonify({'ok': False, 'msg': 'Nenhum ponto de parada. Execute a clusterização primeiro.'}), 400
 
-    # Limpar roteiros anteriores
-    RoteiroPlanejado.query.filter_by(roteirizacao_id=id).delete()
-    for p in paradas:
-        p.roteiro_id = None
-        p.ordem = None
-        p.horario_chegada = None
-        p.horario_partida = None
-
-    # Dividir por capacidade se necessário (filtrar paradas sem coordenadas válidas)
-    clusters_data = []
-    paradas_invalidas = 0
-    for p in paradas:
-        if p.lat and p.lng and -90 <= p.lat <= 90 and -180 <= p.lng <= 180:
-            clusters_data.append({
-                'id': p.id,
-                'lat': p.lat,
-                'lng': p.lng,
-                'centroid_lat': p.lat,
-                'centroid_lng': p.lng,
-                'passageiro_ids': [px.id for px in p.passageiros.filter_by(ativo=True).all()]
-            })
-        else:
-            paradas_invalidas += 1
-
-    if paradas_invalidas:
-        flash(f'{paradas_invalidas} parada(s) ignorada(s) por coordenadas inválidas.', 'warning')
-
-    sub_rotas_capacidade = rutils.dividir_rotas_por_capacidade(clusters_data, rot.capacidade_veiculo)
-
-    # Calcular timestamp de partida estimado para trânsito (ida)
-    # Horário de partida ≈ horário de chegada - tempo máximo de viagem
-    departure_ts = None
-    if rot.horario_chegada:
-        partida_estimada = datetime.combine(datetime.today(), rot.horario_chegada) - timedelta(minutes=rot.tempo_maximo_viagem or 90)
-        departure_ts = rutils._prox_dia_util_timestamp(partida_estimada.time())
-
-    # Timeout global: 240s (PythonAnywhere limita a 300s)
-    start_time = _time.time()
-    TIMEOUT_SECONDS = 240
-
-    # Para cada grupo de capacidade, otimizar e verificar tempo
-    sub_rotas_finais = []
-    timeout_hit = False
-    for grupo_clusters in sub_rotas_capacidade:
-        if _time.time() - start_time > TIMEOUT_SECONDS:
-            timeout_hit = True
-            break
-
-        paradas_opt = [{'id': c['id'], 'lat': c['lat'], 'lng': c['lng']} for c in grupo_clusters]
-        resultado = rutils.otimizar_rota_google(paradas_opt, rot.destino_lat, rot.destino_lng, departure_ts)
-
-        if not resultado or 'error' in resultado:
-            sub_rotas_finais.append((grupo_clusters, resultado))
-            continue
-
-        # Dividir por tempo máximo se necessário
-        sub_tempo = rutils.dividir_rotas_por_tempo(
-            grupo_clusters, resultado, rot.tempo_maximo_viagem,
-            rot.destino_lat, rot.destino_lng, departure_ts
-        )
-        sub_rotas_finais.extend(sub_tempo)
-
-    total_dist = 0
-    max_dur = 0
-    duracoes_rotas = []
-    num_roteiros = 0
-    ordem_global = 0  # Numeração sequencial global de paradas (1, 2, 3, 4, 5...)
-
-    for r_idx, (grupo_clusters, resultado) in enumerate(sub_rotas_finais, start=1):
-        if not resultado or 'error' in resultado:
-            error_detail = resultado.get('error', 'Resposta vazia') if resultado else 'Sem resposta da API'
-            flash(f'Erro ao otimizar rota {r_idx}: {error_detail}', 'danger')
-            continue
-
-        # Criar roteiro planejado
-        dwell = current_app.config.get('ROTEIRIZADOR_DWELL_TIME', 60)
-        schedule = rutils.calcular_horarios(resultado['legs'], rot.horario_chegada, dwell)
-
-        roteiro = RoteiroPlanejado(
-            roteirizacao_id=id,
-            nome=f'Rota {r_idx}',
-            ordem=r_idx,
-            distancia_km=resultado['total_distance_km'],
-            duracao_minutos=resultado['total_duration_min'],
-            polyline_encoded=resultado['polyline'],
-            horario_chegada_destino=rot.horario_chegada,
-            capacidade_veiculo=rot.capacidade_veiculo
-        )
-
-        if schedule:
-            roteiro.horario_saida = schedule[0]['chegada']
-
-        total_pax = sum(len(c.get('passageiro_ids', [])) for c in grupo_clusters)
-        roteiro.total_passageiros = total_pax
-
-        db.session.add(roteiro)
-        db.session.flush()
-
-        # Atribuir paradas ao roteiro com ordem otimizada
-        ordem_otimizada = resultado['waypoint_order']
-        paradas_opt = [{'id': c['id'], 'lat': c['lat'], 'lng': c['lng']} for c in grupo_clusters]
-        for seq_local, orig_idx in enumerate(ordem_otimizada):
-            if orig_idx < len(paradas_opt):
-                parada_id = paradas_opt[orig_idx]['id']
-                parada = PontoParada.query.get(parada_id)
-                if parada:
-                    ordem_global += 1
-                    parada.roteiro_id = roteiro.id
-                    parada.ordem = ordem_global
-                    parada.nome = f'Parada {ordem_global}'
-                    if seq_local < len(schedule):
-                        parada.horario_chegada = schedule[seq_local]['chegada']
-                        parada.horario_partida = schedule[seq_local]['partida']
-
-                    if parada.horario_partida:
-                        tempo_veiculo = rutils.calcular_tempo_veiculo(
-                            seq_local + 1, parada.horario_partida, rot.horario_chegada
-                        )
-                        for passageiro in parada.passageiros.filter_by(ativo=True).all():
-                            passageiro.tempo_no_veiculo = tempo_veiculo
-
-        total_dist += resultado['total_distance_km']
-        duracoes_rotas.append(resultado['total_duration_min'])
-        num_roteiros += 1
-
-    # Duração = maior rota individual (rotas rodam em paralelo com veículos diferentes)
-    max_dur = max(duracoes_rotas) if duracoes_rotas else 0
-
-    rot.total_rotas = num_roteiros
-    rot.distancia_total_km = round(total_dist, 2)
-    rot.duracao_total_minutos = round(max_dur)
-    rot.status = 'otimizado'
+    # Gravar progresso inicial
+    inicio = _time.time()
+    rot.progresso_json = json.dumps({
+        'operacao': 'otimizar', 'status': 'running',
+        'etapa': 'Iniciando otimização...', 'percentual': 0, 'inicio': inicio
+    }, ensure_ascii=False)
     db.session.commit()
 
-    elapsed = round(_time.time() - start_time)
-    msg_tempo = ''
-    if num_roteiros > 1:
-        msg_tempo = f' (dividido em {num_roteiros} rotas para respeitar tempo máximo de {rot.tempo_maximo_viagem} min)'
-    if timeout_hit:
-        rotas_restantes = len(sub_rotas_capacidade) - len(sub_rotas_finais)
-        flash(f'Otimização parcial ({elapsed}s): {num_roteiros} rota(s) processadas. '
-              f'{rotas_restantes} grupo(s) não processado(s) por timeout. '
-              f'Tente "Recalcular" para as rotas restantes.', 'warning')
-    else:
-        flash(f'Otimização concluída ({elapsed}s): {num_roteiros} rota(s), {round(total_dist, 1)} km total.{msg_tempo}', 'success')
-    return redirect(url_for('roteirizador.visualizar', id=id))
+    # Lançar thread em background
+    app = current_app._get_current_object()
+    api_key = current_app.config['GOOGLE_MAPS_API_KEY']
+    dwell_time = current_app.config.get('ROTEIRIZADOR_DWELL_TIME', 60)
+    thread = threading.Thread(target=_otimizar_background, args=(app, id, api_key, dwell_time, inicio), daemon=True)
+    thread.start()
+
+    return jsonify({'ok': True, 'msg': 'Otimização iniciada.'})
+
+
+def _otimizar_background(app, rot_id, api_key, dwell_time, inicio):
+    """Executa otimização em background com atualizações de progresso."""
+    with app.app_context():
+        try:
+            rutils.init_api_key(api_key)
+            rot = db.session.get(Roteirizacao, rot_id)
+            paradas = rot.paradas.filter_by(ativo=True).all()
+
+            # Etapa 1: Limpar roteiros anteriores
+            _atualizar_progresso(app, rot_id, {
+                'operacao': 'otimizar', 'status': 'running',
+                'etapa': 'Preparando dados...', 'percentual': 5, 'inicio': inicio
+            })
+            RoteiroPlanejado.query.filter_by(roteirizacao_id=rot_id).delete()
+            for p in paradas:
+                p.roteiro_id = None
+                p.ordem = None
+                p.horario_chegada = None
+                p.horario_partida = None
+
+            # Validar e preparar dados
+            clusters_data = []
+            for p in paradas:
+                if p.lat and p.lng and -90 <= p.lat <= 90 and -180 <= p.lng <= 180:
+                    clusters_data.append({
+                        'id': p.id, 'lat': p.lat, 'lng': p.lng,
+                        'centroid_lat': p.lat, 'centroid_lng': p.lng,
+                        'passageiro_ids': [px.id for px in p.passageiros.filter_by(ativo=True).all()]
+                    })
+
+            # Etapa 2: Dividir por capacidade
+            _atualizar_progresso(app, rot_id, {
+                'operacao': 'otimizar', 'status': 'running',
+                'etapa': 'Dividindo por capacidade do veículo...', 'percentual': 10, 'inicio': inicio
+            })
+            sub_rotas_capacidade = rutils.dividir_rotas_por_capacidade(clusters_data, rot.capacidade_veiculo)
+
+            departure_ts = None
+            if rot.horario_chegada:
+                partida_estimada = datetime.combine(datetime.today(), rot.horario_chegada) - timedelta(minutes=rot.tempo_maximo_viagem or 90)
+                departure_ts = rutils._prox_dia_util_timestamp(partida_estimada.time())
+
+            # Etapa 3: Otimizar cada grupo
+            start_time = _time.time()
+            TIMEOUT_SECONDS = 240
+            sub_rotas_finais = []
+            timeout_hit = False
+            total_grupos = len(sub_rotas_capacidade)
+
+            for g_idx, grupo_clusters in enumerate(sub_rotas_capacidade, start=1):
+                if _time.time() - start_time > TIMEOUT_SECONDS:
+                    timeout_hit = True
+                    break
+
+                pct = 15 + int(55 * g_idx / total_grupos)
+                _atualizar_progresso(app, rot_id, {
+                    'operacao': 'otimizar', 'status': 'running',
+                    'etapa': f'Otimizando grupo {g_idx} de {total_grupos}...',
+                    'percentual': pct, 'inicio': inicio
+                })
+
+                paradas_opt = [{'id': c['id'], 'lat': c['lat'], 'lng': c['lng']} for c in grupo_clusters]
+                resultado = rutils.otimizar_rota_google(paradas_opt, rot.destino_lat, rot.destino_lng, departure_ts)
+
+                if not resultado or 'error' in resultado:
+                    sub_rotas_finais.append((grupo_clusters, resultado))
+                    continue
+
+                sub_tempo = rutils.dividir_rotas_por_tempo(
+                    grupo_clusters, resultado, rot.tempo_maximo_viagem,
+                    rot.destino_lat, rot.destino_lng, departure_ts
+                )
+                sub_rotas_finais.extend(sub_tempo)
+
+            # Etapa 4: Criar roteiros planejados
+            _atualizar_progresso(app, rot_id, {
+                'operacao': 'otimizar', 'status': 'running',
+                'etapa': 'Criando roteiros planejados...', 'percentual': 80, 'inicio': inicio
+            })
+
+            total_dist = 0
+            duracoes_rotas = []
+            num_roteiros = 0
+            ordem_global = 0
+
+            for r_idx, (grupo_clusters, resultado) in enumerate(sub_rotas_finais, start=1):
+                if not resultado or 'error' in resultado:
+                    continue
+
+                schedule = rutils.calcular_horarios(resultado['legs'], rot.horario_chegada, dwell_time)
+                roteiro = RoteiroPlanejado(
+                    roteirizacao_id=rot_id,
+                    nome=f'Rota {r_idx}',
+                    ordem=r_idx,
+                    distancia_km=resultado['total_distance_km'],
+                    duracao_minutos=resultado['total_duration_min'],
+                    polyline_encoded=resultado['polyline'],
+                    horario_chegada_destino=rot.horario_chegada,
+                    capacidade_veiculo=rot.capacidade_veiculo
+                )
+                if schedule:
+                    roteiro.horario_saida = schedule[0]['chegada']
+                total_pax = sum(len(c.get('passageiro_ids', [])) for c in grupo_clusters)
+                roteiro.total_passageiros = total_pax
+                db.session.add(roteiro)
+                db.session.flush()
+
+                ordem_otimizada = resultado['waypoint_order']
+                paradas_opt = [{'id': c['id'], 'lat': c['lat'], 'lng': c['lng']} for c in grupo_clusters]
+                for seq_local, orig_idx in enumerate(ordem_otimizada):
+                    if orig_idx < len(paradas_opt):
+                        parada_id = paradas_opt[orig_idx]['id']
+                        parada = PontoParada.query.get(parada_id)
+                        if parada:
+                            ordem_global += 1
+                            parada.roteiro_id = roteiro.id
+                            parada.ordem = ordem_global
+                            parada.nome = f'Parada {ordem_global}'
+                            if seq_local < len(schedule):
+                                parada.horario_chegada = schedule[seq_local]['chegada']
+                                parada.horario_partida = schedule[seq_local]['partida']
+                            if parada.horario_partida:
+                                tempo_veiculo = rutils.calcular_tempo_veiculo(
+                                    seq_local + 1, parada.horario_partida, rot.horario_chegada
+                                )
+                                for passageiro in parada.passageiros.filter_by(ativo=True).all():
+                                    passageiro.tempo_no_veiculo = tempo_veiculo
+
+                total_dist += resultado['total_distance_km']
+                duracoes_rotas.append(resultado['total_duration_min'])
+                num_roteiros += 1
+
+            # Finalizar
+            max_dur = max(duracoes_rotas) if duracoes_rotas else 0
+            rot.total_rotas = num_roteiros
+            rot.distancia_total_km = round(total_dist, 2)
+            rot.duracao_total_minutos = round(max_dur)
+            rot.status = 'otimizado'
+
+            elapsed = round(_time.time() - start_time)
+            msg_tempo = ''
+            if num_roteiros > 1:
+                msg_tempo = f' (dividido em {num_roteiros} rotas para respeitar tempo máximo de {rot.tempo_maximo_viagem} min)'
+            if timeout_hit:
+                rotas_restantes = len(sub_rotas_capacidade) - len(sub_rotas_finais)
+                flash_msg = (f'Otimização parcial ({elapsed}s): {num_roteiros} rota(s) processadas. '
+                             f'{rotas_restantes} grupo(s) não processado(s) por timeout. '
+                             f'Tente "Recalcular" para as rotas restantes.')
+                flash_cat = 'warning'
+            else:
+                flash_msg = f'Otimização concluída ({elapsed}s): {num_roteiros} rota(s), {round(total_dist, 1)} km total.{msg_tempo}'
+                flash_cat = 'success'
+
+            rot.progresso_json = json.dumps({
+                'operacao': 'otimizar', 'status': 'completed',
+                'etapa': 'Concluído!', 'percentual': 100, 'inicio': inicio,
+                'resultado_flash': {'msg': flash_msg, 'cat': flash_cat}
+            }, ensure_ascii=False)
+            db.session.commit()
+
+        except Exception as e:
+            try:
+                rot = db.session.get(Roteirizacao, rot_id)
+                if rot:
+                    rot.progresso_json = json.dumps({
+                        'operacao': 'otimizar', 'status': 'error',
+                        'etapa': 'Erro na otimização', 'percentual': 0, 'inicio': inicio,
+                        'erro': str(e)
+                    }, ensure_ascii=False)
+                    db.session.commit()
+            except Exception:
+                pass
 
 
 # ============================================

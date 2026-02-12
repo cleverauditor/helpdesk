@@ -114,18 +114,18 @@
                         <a href="{{ url_for('roteirizador.listar_passageiros', id=rot.id) }}">Corrigir manualmente</a>
                     </div>
                     {% endif %}
-                    <form method="POST" action="{{ url_for('roteirizador.clusterizar', id=rot.id) }}">
-                        <button class="btn btn-dark"><i class="bi bi-diagram-3"></i> Clusterizar Passageiros</button>
-                    </form>
+                    <button class="btn btn-dark" type="button" onclick="iniciarOperacao('clusterizar')">
+                        <i class="bi bi-diagram-3"></i> Clusterizar Passageiros
+                    </button>
                 </div>
 
                 {% elif rot.status == 'clusterizado' %}
                 <div class="alert alert-info">
                     <h6><i class="bi bi-info-circle"></i> Próximo passo: Otimizar</h6>
                     <p class="mb-2">Calcule a melhor rota e horários para cada ponto de parada.</p>
-                    <form method="POST" action="{{ url_for('roteirizador.otimizar', id=rot.id) }}">
-                        <button class="btn btn-success"><i class="bi bi-graph-up"></i> Otimizar Rota</button>
-                    </form>
+                    <button class="btn btn-success" type="button" onclick="iniciarOperacao('otimizar')">
+                        <i class="bi bi-graph-up"></i> Otimizar Rota
+                    </button>
                 </div>
 
                 {% elif rot.status == 'otimizado' %}
@@ -561,6 +561,32 @@
         </div>
     </div>
 </div>
+
+<!-- Modal de Progresso -->
+<div class="modal fade" id="progressoModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white py-2">
+        <h6 class="modal-title mb-0" id="progressoTitulo">
+          <i class="bi bi-hourglass-split"></i> Processando...
+        </h6>
+      </div>
+      <div class="modal-body text-center py-4">
+        <div class="mb-3" id="progressoSpinner">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Processando...</span>
+          </div>
+        </div>
+        <p class="fw-bold mb-1" id="progressoEtapa">Iniciando...</p>
+        <div class="progress mb-2" style="height: 24px;">
+          <div class="progress-bar progress-bar-striped progress-bar-animated"
+               id="progressoBar" role="progressbar" style="width: 0%">0%</div>
+        </div>
+        <small class="text-muted" id="progressoTempo">Tempo decorrido: 0s</small>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -827,6 +853,138 @@ function initMap() {
         map.fitBounds(bounds, 50);
     }
 }
+
+// ============================================
+// PROGRESSO DE OPERAÇÕES LONGAS
+// ============================================
+var progressoModal = null;
+var pollingInterval = null;
+var rotId = {{ rot.id }};
+
+function iniciarOperacao(tipo) {
+    var titulo = tipo === 'clusterizar' ? 'Clusterizando Passageiros' : 'Otimizando Rota';
+    document.getElementById('progressoTitulo').innerHTML = '<i class="bi bi-hourglass-split"></i> ' + titulo;
+    document.getElementById('progressoEtapa').textContent = 'Iniciando...';
+    document.getElementById('progressoBar').style.width = '0%';
+    document.getElementById('progressoBar').textContent = '0%';
+    document.getElementById('progressoBar').className = 'progress-bar progress-bar-striped progress-bar-animated';
+    document.getElementById('progressoTempo').textContent = 'Tempo decorrido: 0s';
+    document.getElementById('progressoSpinner').style.display = '';
+
+    // Remover botão fechar se existir de execução anterior
+    var btnFechar = document.getElementById('btnFecharProgresso');
+    if (btnFechar) btnFechar.remove();
+
+    progressoModal = new bootstrap.Modal(document.getElementById('progressoModal'));
+    progressoModal.show();
+
+    fetch('/roteirizador/' + rotId + '/' + tipo, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            iniciarPolling();
+        } else {
+            mostrarErro(data.msg || 'Erro ao iniciar operação');
+        }
+    })
+    .catch(function(err) {
+        mostrarErro('Erro de conexão: ' + err.message);
+    });
+}
+
+function iniciarPolling() {
+    pollingInterval = setInterval(function() {
+        fetch('/roteirizador/' + rotId + '/progresso')
+        .then(function(resp) { return resp.json(); })
+        .then(function(data) {
+            if (data.status === 'running') {
+                atualizarProgresso(data);
+            } else if (data.status === 'completed') {
+                pararPolling();
+                atualizarProgresso(data);
+                fetch('/roteirizador/' + rotId + '/progresso/limpar', {method: 'POST'})
+                .then(function() {
+                    if (data.resultado_flash) {
+                        // Flash será mostrado pelo redirect
+                    }
+                    setTimeout(function() { window.location.reload(); }, 800);
+                });
+            } else if (data.status === 'error') {
+                pararPolling();
+                fetch('/roteirizador/' + rotId + '/progresso/limpar', {method: 'POST'});
+                mostrarErro(data.erro || 'Erro desconhecido');
+            }
+        })
+        .catch(function() { /* polling falhou, continua tentando */ });
+    }, 1500);
+}
+
+function atualizarProgresso(data) {
+    var pct = data.percentual || 0;
+    var bar = document.getElementById('progressoBar');
+    bar.style.width = pct + '%';
+    bar.textContent = pct + '%';
+
+    if (pct >= 100) {
+        bar.classList.remove('progress-bar-animated');
+        bar.classList.add('bg-success');
+        document.getElementById('progressoSpinner').style.display = 'none';
+        document.getElementById('progressoEtapa').innerHTML = '<i class="bi bi-check-circle text-success"></i> Concluído!';
+    } else {
+        document.getElementById('progressoEtapa').textContent = data.etapa || '';
+    }
+
+    if (data.elapsed !== undefined) {
+        var min = Math.floor(data.elapsed / 60);
+        var sec = data.elapsed % 60;
+        var tempoStr = min > 0 ? min + 'min ' + sec + 's' : sec + 's';
+        document.getElementById('progressoTempo').textContent = 'Tempo decorrido: ' + tempoStr;
+    }
+}
+
+function mostrarErro(msg) {
+    document.getElementById('progressoSpinner').style.display = 'none';
+    document.getElementById('progressoEtapa').innerHTML =
+        '<span class="text-danger"><i class="bi bi-exclamation-triangle"></i> ' + msg + '</span>';
+    var bar = document.getElementById('progressoBar');
+    bar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+    bar.classList.add('bg-danger');
+    var footer = document.createElement('div');
+    footer.id = 'btnFecharProgresso';
+    footer.className = 'text-center mt-3';
+    footer.innerHTML = '<button class="btn btn-secondary" onclick="fecharProgresso()">Fechar</button>';
+    document.getElementById('progressoModal').querySelector('.modal-body').appendChild(footer);
+}
+
+function fecharProgresso() {
+    pararPolling();
+    if (progressoModal) progressoModal.hide();
+    window.location.reload();
+}
+
+function pararPolling() {
+    if (pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }
+}
+
+// Ao carregar a página, verificar se tem operação em andamento
+(function() {
+    fetch('/roteirizador/' + rotId + '/progresso')
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+        if (data.status === 'running') {
+            var titulo = data.operacao === 'clusterizar' ? 'Clusterizando Passageiros' : 'Otimizando Rota';
+            document.getElementById('progressoTitulo').innerHTML = '<i class="bi bi-hourglass-split"></i> ' + titulo;
+            progressoModal = new bootstrap.Modal(document.getElementById('progressoModal'));
+            progressoModal.show();
+            atualizarProgresso(data);
+            iniciarPolling();
+        }
+    })
+    .catch(function() {});
+})();
 
 </script>
 {% endblock %}

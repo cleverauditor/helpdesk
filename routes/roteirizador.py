@@ -610,12 +610,13 @@ def _otimizar_background(app, rot_id, api_key, dwell_time, inicio):
                 'operacao': 'otimizar', 'status': 'running',
                 'etapa': 'Preparando dados...', 'percentual': 5, 'inicio': inicio
             })
-            RoteiroPlanejado.query.filter_by(roteirizacao_id=rot_id).delete()
             for p in paradas:
                 p.roteiro_id = None
                 p.ordem = None
                 p.horario_chegada = None
                 p.horario_partida = None
+            db.session.flush()
+            RoteiroPlanejado.query.filter_by(roteirizacao_id=rot_id).delete()
 
             # Validar e preparar dados
             clusters_data = []

@@ -52,33 +52,30 @@ def allowed_import_file(filename):
 
 
 # ============================================
-# PROGRESSO DE OPERAÇÕES LONGAS
+# PROGRESSO DE OPERAÇÕES LONGAS (em memória)
 # ============================================
 
+_progresso_store = {}
+
+
 def _atualizar_progresso(app, rot_id, dados):
-    """Atualiza o campo progresso_json de uma roteirização."""
-    with app.app_context():
-        rot = db.session.get(Roteirizacao, rot_id)
-        if rot:
-            rot.progresso_json = json.dumps(dados, ensure_ascii=False)
-            db.session.commit()
+    """Atualiza o progresso em memória (sem tocar no banco)."""
+    _progresso_store[rot_id] = dados
 
 
 @roteirizador_bp.route('/<int:id>/progresso')
 @roteirizador_required
 def progresso(id):
-    rot = Roteirizacao.query.get_or_404(id)
-    if rot.progresso_json:
-        data = json.loads(rot.progresso_json)
+    data = _progresso_store.get(id)
+    if data:
+        data = dict(data)  # cópia para não modificar o original
         if data.get('inicio'):
             elapsed = _time.time() - data['inicio']
             data['elapsed'] = round(elapsed)
-            # Detecção de operação abandonada (servidor reiniciou)
             if data.get('status') == 'running' and elapsed > 300:
                 data['status'] = 'error'
                 data['erro'] = 'Operação expirou. Tente novamente.'
-                rot.progresso_json = None
-                db.session.commit()
+                _progresso_store.pop(id, None)
         return jsonify(data)
     return jsonify({'status': 'idle'})
 
@@ -86,9 +83,7 @@ def progresso(id):
 @roteirizador_bp.route('/<int:id>/progresso/limpar', methods=['POST'])
 @roteirizador_required
 def limpar_progresso(id):
-    rot = Roteirizacao.query.get_or_404(id)
-    rot.progresso_json = None
-    db.session.commit()
+    _progresso_store.pop(id, None)
     return jsonify({'ok': True})
 
 
@@ -453,10 +448,9 @@ def clusterizar(id):
     rot = Roteirizacao.query.get_or_404(id)
 
     # Verificar se já tem operação em andamento
-    if rot.progresso_json:
-        prog = json.loads(rot.progresso_json)
-        if prog.get('status') == 'running':
-            return jsonify({'ok': False, 'msg': 'Operação já em andamento.'}), 409
+    prog = _progresso_store.get(id)
+    if prog and prog.get('status') == 'running':
+        return jsonify({'ok': False, 'msg': 'Operação já em andamento.'}), 409
 
     # Validar passageiros
     total_geo = rot.passageiros.filter(
@@ -468,13 +462,12 @@ def clusterizar(id):
     if not total_geo:
         return jsonify({'ok': False, 'msg': 'Nenhum passageiro geocodificado para agrupar.'}), 400
 
-    # Gravar progresso inicial
+    # Gravar progresso inicial em memória
     inicio = _time.time()
-    rot.progresso_json = json.dumps({
+    _progresso_store[id] = {
         'operacao': 'clusterizar', 'status': 'running',
         'etapa': 'Iniciando clusterização...', 'percentual': 0, 'inicio': inicio
-    }, ensure_ascii=False)
-    db.session.commit()
+    }
 
     # Lançar thread em background
     app = current_app._get_current_object()
@@ -552,25 +545,21 @@ def _clusterizar_background(app, rot_id, api_key, inicio):
             # Etapa 4: Finalizar
             rot.total_paradas = total_clusters
             rot.status = 'clusterizado'
-            rot.progresso_json = json.dumps({
+            db.session.commit()
+
+            _progresso_store[rot_id] = {
                 'operacao': 'clusterizar', 'status': 'completed',
                 'etapa': 'Concluído!', 'percentual': 100, 'inicio': inicio,
                 'resultado_flash': {'msg': f'{total_clusters} pontos de parada criados.', 'cat': 'success'}
-            }, ensure_ascii=False)
-            db.session.commit()
+            }
 
         except Exception as e:
-            try:
-                rot = db.session.get(Roteirizacao, rot_id)
-                if rot:
-                    rot.progresso_json = json.dumps({
-                        'operacao': 'clusterizar', 'status': 'error',
-                        'etapa': 'Erro na clusterização', 'percentual': 0, 'inicio': inicio,
-                        'erro': str(e)
-                    }, ensure_ascii=False)
-                    db.session.commit()
-            except Exception:
-                pass
+            db.session.rollback()
+            _progresso_store[rot_id] = {
+                'operacao': 'clusterizar', 'status': 'error',
+                'etapa': 'Erro na clusterização', 'percentual': 0, 'inicio': inicio,
+                'erro': str(e)
+            }
 
 
 # ============================================
@@ -583,22 +572,20 @@ def otimizar(id):
     rot = Roteirizacao.query.get_or_404(id)
 
     # Verificar se já tem operação em andamento
-    if rot.progresso_json:
-        prog = json.loads(rot.progresso_json)
-        if prog.get('status') == 'running':
-            return jsonify({'ok': False, 'msg': 'Operação já em andamento.'}), 409
+    prog = _progresso_store.get(id)
+    if prog and prog.get('status') == 'running':
+        return jsonify({'ok': False, 'msg': 'Operação já em andamento.'}), 409
 
     paradas = rot.paradas.filter_by(ativo=True).all()
     if not paradas:
         return jsonify({'ok': False, 'msg': 'Nenhum ponto de parada. Execute a clusterização primeiro.'}), 400
 
-    # Gravar progresso inicial
+    # Gravar progresso inicial em memória
     inicio = _time.time()
-    rot.progresso_json = json.dumps({
+    _progresso_store[id] = {
         'operacao': 'otimizar', 'status': 'running',
         'etapa': 'Iniciando otimização...', 'percentual': 0, 'inicio': inicio
-    }, ensure_ascii=False)
-    db.session.commit()
+    }
 
     # Lançar thread em background
     app = current_app._get_current_object()
@@ -763,25 +750,21 @@ def _otimizar_background(app, rot_id, api_key, dwell_time, inicio):
                 flash_msg = f'Otimização concluída ({elapsed}s): {num_roteiros} rota(s), {round(total_dist, 1)} km total.{msg_tempo}'
                 flash_cat = 'success'
 
-            rot.progresso_json = json.dumps({
+            db.session.commit()
+
+            _progresso_store[rot_id] = {
                 'operacao': 'otimizar', 'status': 'completed',
                 'etapa': 'Concluído!', 'percentual': 100, 'inicio': inicio,
                 'resultado_flash': {'msg': flash_msg, 'cat': flash_cat}
-            }, ensure_ascii=False)
-            db.session.commit()
+            }
 
         except Exception as e:
-            try:
-                rot = db.session.get(Roteirizacao, rot_id)
-                if rot:
-                    rot.progresso_json = json.dumps({
-                        'operacao': 'otimizar', 'status': 'error',
-                        'etapa': 'Erro na otimização', 'percentual': 0, 'inicio': inicio,
-                        'erro': str(e)
-                    }, ensure_ascii=False)
-                    db.session.commit()
-            except Exception:
-                pass
+            db.session.rollback()
+            _progresso_store[rot_id] = {
+                'operacao': 'otimizar', 'status': 'error',
+                'etapa': 'Erro na otimização', 'percentual': 0, 'inicio': inicio,
+                'erro': str(e)
+            }
 
 
 # ============================================

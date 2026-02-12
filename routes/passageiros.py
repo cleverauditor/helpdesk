@@ -293,39 +293,12 @@ def importar():
         except OSError:
             pass
 
-        # Geocodificar os passageiros recém-importados
-        geo_sucesso = 0
-        geo_falha = 0
-        if count > 0:
-            rutils.init_api_key(current_app.config['GOOGLE_MAPS_API_KEY'])
-            novos = PassageiroBase.query.filter_by(
-                cliente_id=cliente_id, turno_id=turno_id,
-                geocode_status='pendente', ativo=True
-            ).all()
-            for p in novos:
-                endereco_completo = p.endereco_completo()
-                if not endereco_completo:
-                    p.geocode_status = 'falha'
-                    geo_falha += 1
-                    continue
-                geo = rutils.geocode_endereco(endereco_completo)
-                if geo['status'] == 'sucesso':
-                    p.lat = geo['lat']
-                    p.lng = geo['lng']
-                    p.endereco_formatado = geo['endereco_formatado']
-                    p.geocode_status = 'sucesso'
-                    geo_sucesso += 1
-                else:
-                    p.geocode_status = 'falha'
-                    geo_falha += 1
-            db.session.commit()
-
         msg = f'{count} passageiros importados!'
         if duplicados:
             msg += f' ({duplicados} duplicados ignorados)'
-        if geo_sucesso or geo_falha:
-            msg += f' Geocodificação: {geo_sucesso} OK, {geo_falha} falha(s).'
-        flash(msg, 'success' if geo_falha == 0 else 'warning')
+        if count > 0:
+            msg += ' Use o botão "Geocodificar" para obter as coordenadas.'
+        flash(msg, 'success')
         return redirect(url_for('passageiros.lista', cliente_id=cliente_id, turno_id=turno_id))
 
     clientes = Cliente.query.filter_by(ativo=True).order_by(Cliente.nome).all()

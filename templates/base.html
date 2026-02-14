@@ -73,6 +73,16 @@
             letter-spacing: 1px;
             font-weight: 600;
         }
+        .sidebar-section {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--maxvia-blue);
+            padding: 18px 20px 6px;
+            font-weight: 700;
+            border-top: 1px solid rgba(255,255,255,.08);
+            margin-top: 4px;
+        }
         .sidebar-nav {
             flex: 1;
             overflow-y: auto;
@@ -214,13 +224,16 @@
             {% endif %}
         {% endif %}
         <div class="sidebar-nav">
-        <ul class="nav flex-column mt-3">
+        <ul class="nav flex-column">
             <li class="nav-item">
                 <a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" href="{{ url_for('index') }}">
                     <i class="bi bi-house"></i> Início
                 </a>
             </li>
+
+            {# ── ATENDIMENTO ── #}
             {% if ns.tem_atendimento %}
+            <li><div class="sidebar-section">Atendimento</div></li>
             <li class="nav-item">
                 <a class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}" href="{{ url_for('dashboard.index') }}">
                     <i class="bi bi-speedometer2"></i> Dashboard
@@ -236,26 +249,19 @@
                     <i class="bi bi-file-earmark-bar-graph"></i> {% if current_user.is_cliente() %}Meus Relatórios{% else %}Relatórios{% endif %}
                 </a>
             </li>
-            {% endif %}
-            {% if current_user.is_admin() or current_user.is_gestor() %}
-            <li class="nav-item">
-                <a class="nav-link {% if request.endpoint == 'users.lista' %}active{% endif %}" href="{{ url_for('users.lista') }}">
-                    <i class="bi bi-people"></i> Usuários
-                </a>
-            </li>
-            {% endif %}
             {% if current_user.is_admin() %}
             <li class="nav-item">
-                <a class="nav-link {% if request.endpoint == 'users.categorias' %}active{% endif %}" href="{{ url_for('users.categorias') }}">
-                    <i class="bi bi-tags"></i> Categorias
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.endpoint == 'users.sla_config' %}active{% endif %}" href="{{ url_for('users.sla_config') }}">
+                <a class="nav-link {% if 'sla' in request.endpoint %}active{% endif %}" href="{{ url_for('users.sla_config') }}">
                     <i class="bi bi-clock-history"></i> SLA
                 </a>
             </li>
             {% endif %}
+            {% endif %}
+
+            {# ── OPERAÇÕES ── #}
+            {% set tem_operacoes = current_user.is_admin() or current_user.categorias.filter_by(nome='Auditoria').first() or current_user.categorias.filter_by(nome='Análise de Combustível').first() or current_user.categorias.filter_by(nome='Roteirizador').first() or current_user.categorias.filter_by(nome='Indicadores Diretoria').first() %}
+            {% if tem_operacoes %}
+            <li><div class="sidebar-section">Operações</div></li>
             {% if current_user.is_admin() or current_user.categorias.filter_by(nome='Auditoria').first() or current_user.categorias.filter_by(nome='Análise de Combustível').first() %}
             <li class="nav-item">
                 <a class="nav-link {% if 'clientes' in request.endpoint %}active{% endif %}" href="{{ url_for('clientes.lista') }}">
@@ -277,13 +283,6 @@
                 </a>
             </li>
             {% endif %}
-            {% if current_user.is_admin() or current_user.categorias.filter_by(nome='Indicadores Diretoria').first() %}
-            <li class="nav-item">
-                <a class="nav-link {% if 'indicadores' in request.endpoint %}active{% endif %}" href="{{ url_for('indicadores.painel') }}">
-                    <i class="bi bi-graph-up-arrow"></i> Indicadores
-                </a>
-            </li>
-            {% endif %}
             {% if current_user.is_admin() or current_user.categorias.filter_by(nome='Roteirizador').first() %}
             <li class="nav-item">
                 <a class="nav-link {% if 'roteirizador' in request.endpoint %}active{% endif %}" href="{{ url_for('roteirizador.lista') }}">
@@ -292,7 +291,7 @@
             </li>
             <li class="nav-item">
                 <a class="nav-link {% if 'passageiros' in request.endpoint %}active{% endif %}" href="{{ url_for('passageiros.lista') }}">
-                    <i class="bi bi-people"></i> Passageiros
+                    <i class="bi bi-people-fill"></i> Passageiros
                 </a>
             </li>
             <li class="nav-item">
@@ -300,6 +299,31 @@
                     <i class="bi bi-truck"></i> Veículos
                 </a>
             </li>
+            {% endif %}
+            {% if current_user.is_admin() or current_user.categorias.filter_by(nome='Indicadores Diretoria').first() %}
+            <li class="nav-item">
+                <a class="nav-link {% if 'indicadores' in request.endpoint %}active{% endif %}" href="{{ url_for('indicadores.painel') }}">
+                    <i class="bi bi-graph-up-arrow"></i> Indicadores
+                </a>
+            </li>
+            {% endif %}
+            {% endif %}
+
+            {# ── ADMINISTRAÇÃO ── #}
+            {% if current_user.is_admin() or current_user.is_gestor() %}
+            <li><div class="sidebar-section">Administração</div></li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'users.lista' %}active{% endif %}" href="{{ url_for('users.lista') }}">
+                    <i class="bi bi-people"></i> Usuários
+                </a>
+            </li>
+            {% if current_user.is_admin() %}
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'users.categorias' %}active{% endif %}" href="{{ url_for('users.categorias') }}">
+                    <i class="bi bi-tags"></i> Categorias
+                </a>
+            </li>
+            {% endif %}
             {% endif %}
         </ul>
         </div>

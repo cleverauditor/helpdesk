@@ -241,6 +241,13 @@
                     <i class="bi bi-info-circle"></i> Horário administrativo: 08:00 - 17:00 (Seg-Sex)
                 </div>
 
+                {% set sla_nome = ticket.sla_cliente_nome() %}
+                {% if sla_nome %}
+                <div class="alert alert-warning py-2 small mb-3">
+                    <i class="bi bi-building-check"></i> SLA personalizado: <strong>{{ sla_nome }}</strong>
+                </div>
+                {% endif %}
+
                 <div class="mb-3">
                     <strong>Resposta</strong><br>
                     <small class="text-muted">Limite: {{ ticket.sla_resposta_limite.strftime('%d/%m/%Y %H:%M') if ticket.sla_resposta_limite else '-' }}</small>

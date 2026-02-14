@@ -126,6 +126,7 @@ class User(UserMixin, db.Model):
     tipo = db.Column(db.String(20), nullable=False, default='cliente_externo')
     # tipos: admin, gestor, atendente, cliente_interno, cliente_externo
     empresa = db.Column(db.String(150))  # Para clientes externos
+    cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=True)
     departamento = db.Column(db.String(100))
     telefone = db.Column(db.String(20))
     ativo = db.Column(db.Boolean, default=True)
@@ -140,6 +141,8 @@ class User(UserMixin, db.Model):
     # Categorias que o atendente pode visualizar/atender
     categorias = db.relationship('Category', secondary=atendente_categoria, lazy='dynamic',
                                   backref=db.backref('atendentes', lazy='dynamic'))
+    # Empresa vinculada (para SLA por cliente)
+    cliente_empresa = db.relationship('Cliente', foreign_keys=[cliente_id])
 
     def set_senha(self, senha):
         self.senha_hash = generate_password_hash(senha)
@@ -219,6 +222,44 @@ class SLAConfig(db.Model):
         return f'<SLAConfig {self.prioridade}>'
 
 
+class SLACliente(db.Model):
+    """SLA personalizado por empresa cliente"""
+    __tablename__ = 'sla_clientes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False, unique=True)
+
+    # Tempos por prioridade (horas úteis)
+    critica_resposta_horas = db.Column(db.Integer, nullable=False, default=1)
+    critica_resolucao_horas = db.Column(db.Integer, nullable=False, default=4)
+    alta_resposta_horas = db.Column(db.Integer, nullable=False, default=2)
+    alta_resolucao_horas = db.Column(db.Integer, nullable=False, default=8)
+    media_resposta_horas = db.Column(db.Integer, nullable=False, default=4)
+    media_resolucao_horas = db.Column(db.Integer, nullable=False, default=24)
+    baixa_resposta_horas = db.Column(db.Integer, nullable=False, default=8)
+    baixa_resolucao_horas = db.Column(db.Integer, nullable=False, default=48)
+
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+
+    cliente = db.relationship('Cliente', backref=db.backref('sla_config', uselist=False))
+
+    def get_sla(self, prioridade):
+        """Retorna objeto com tempo_resposta_horas e tempo_resolucao_horas para a prioridade"""
+        mapping = {
+            'critica': (self.critica_resposta_horas, self.critica_resolucao_horas),
+            'alta': (self.alta_resposta_horas, self.alta_resolucao_horas),
+            'media': (self.media_resposta_horas, self.media_resolucao_horas),
+            'baixa': (self.baixa_resposta_horas, self.baixa_resolucao_horas),
+        }
+        resp, resol = mapping.get(prioridade, (8, 48))
+        return type('SLA', (), {'tempo_resposta_horas': resp, 'tempo_resolucao_horas': resol})()
+
+    def __repr__(self):
+        return f'<SLACliente {self.cliente.nome if self.cliente else self.cliente_id}>'
+
+
 class Ticket(db.Model):
     __tablename__ = 'tickets'
 
@@ -250,9 +291,29 @@ class Ticket(db.Model):
 
     def calcular_sla(self):
         """Calcula os limites de SLA considerando horário administrativo (08:00-17:00, seg-sex)"""
-        sla = SLAConfig.get_sla(self.prioridade)
+        sla = None
+        # Tentar SLA personalizado do cliente
+        if self.cliente and self.cliente.cliente_id:
+            sla_cliente = SLACliente.query.filter_by(
+                cliente_id=self.cliente.cliente_id, ativo=True
+            ).first()
+            if sla_cliente:
+                sla = sla_cliente.get_sla(self.prioridade)
+        # Fallback: SLA global
+        if not sla:
+            sla = SLAConfig.get_sla(self.prioridade)
         self.sla_resposta_limite = adicionar_horas_uteis(self.criado_em, sla.tempo_resposta_horas)
         self.sla_resolucao_limite = adicionar_horas_uteis(self.criado_em, sla.tempo_resolucao_horas)
+
+    def sla_cliente_nome(self):
+        """Retorna o nome do cliente se estiver usando SLA personalizado, ou None"""
+        if self.cliente and self.cliente.cliente_id:
+            sla_cliente = SLACliente.query.filter_by(
+                cliente_id=self.cliente.cliente_id, ativo=True
+            ).first()
+            if sla_cliente and sla_cliente.cliente:
+                return sla_cliente.cliente.nome
+        return None
 
     def sla_resposta_status(self):
         """Verifica status do SLA de resposta considerando horas úteis"""

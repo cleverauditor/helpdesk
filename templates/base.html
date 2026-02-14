@@ -22,11 +22,13 @@
         }
         .sidebar {
             width: var(--sidebar-width);
-            min-height: 100vh;
+            height: 100vh;
             background: var(--maxvia-dark);
             position: fixed;
             left: 0;
             top: 0;
+            display: flex;
+            flex-direction: column;
         }
         .sidebar .nav-link {
             color: rgba(255,255,255,.75);
@@ -71,9 +73,26 @@
             letter-spacing: 1px;
             font-weight: 600;
         }
+        .sidebar-nav {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        .sidebar-nav::-webkit-scrollbar {
+            width: 5px;
+        }
+        .sidebar-nav::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .sidebar-nav::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,.2);
+            border-radius: 3px;
+        }
+        .sidebar-nav::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,.4);
+        }
         .sidebar-footer {
-            position: absolute;
-            bottom: 0;
+            flex-shrink: 0;
             width: 100%;
             padding: 15px;
             border-top: 1px solid rgba(255,255,255,.1);
@@ -157,8 +176,11 @@
         @media (max-width: 768px) {
             .sidebar {
                 width: 100%;
-                min-height: auto;
+                height: auto;
                 position: relative;
+            }
+            .sidebar-nav {
+                max-height: 50vh;
             }
             .main-content {
                 margin-left: 0;
@@ -191,6 +213,7 @@
                 {% endfor %}
             {% endif %}
         {% endif %}
+        <div class="sidebar-nav">
         <ul class="nav flex-column mt-3">
             <li class="nav-item">
                 <a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" href="{{ url_for('index') }}">
@@ -279,6 +302,7 @@
             </li>
             {% endif %}
         </ul>
+        </div>
         <div class="sidebar-footer">
             <div class="text-white-50 small mb-2">
                 <i class="bi bi-person-circle"></i> {{ current_user.nome }}

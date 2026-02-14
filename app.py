@@ -8,7 +8,7 @@ load_dotenv(os.path.join(basedir, '.env'))
 from flask import Flask, redirect, url_for, render_template
 from flask_login import LoginManager, login_required, current_user
 from config import Config
-from models import db, User, Category, SLAConfig, IndicadorCategoria, Indicador
+from models import db, User, Category, SLAConfig, SLACliente, IndicadorCategoria, Indicador, Cliente
 
 def create_app():
     app = Flask(__name__)
@@ -193,6 +193,13 @@ def create_app():
             db.session.rollback()
             db.session.execute(db.text("ALTER TABLE roteirizacoes ADD COLUMN progresso_json TEXT"))
             db.session.commit()
+        # Migration segura: adicionar cliente_id em users
+        try:
+            db.session.execute(db.text("SELECT cliente_id FROM users LIMIT 1"))
+        except Exception:
+            db.session.rollback()
+            db.session.execute(db.text("ALTER TABLE users ADD COLUMN cliente_id INTEGER REFERENCES clientes(id)"))
+            db.session.commit()
         init_data()
 
     return app
@@ -293,6 +300,18 @@ def init_data():
                 db.session.add(ind)
 
     db.session.commit()
+
+    # Backfill: popular cliente_id para users que já têm empresa
+    users_sem_cliente_id = User.query.filter(
+        User.empresa.isnot(None), User.empresa != '',
+        User.cliente_id.is_(None)
+    ).all()
+    for user in users_sem_cliente_id:
+        cliente = Cliente.query.filter_by(nome=user.empresa).first()
+        if cliente:
+            user.cliente_id = cliente.id
+    if users_sem_cliente_id:
+        db.session.commit()
 
 
 if __name__ == '__main__':

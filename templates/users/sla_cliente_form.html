@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar' if sla else 'Novo' }} SLA por Cliente - Sistemas MaxVia{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>
+                <i class="bi bi-building-check"></i>
+                {% if sla %}
+                    Editar SLA - {{ sla.cliente.nome }}
+                {% else %}
+                    Novo SLA por Cliente
+                {% endif %}
+            </h2>
+            <a href="{{ url_for('users.sla_clientes') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Voltar
+            </a>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <form method="POST">
+                    {% if not sla %}
+                    <div class="mb-4">
+                        <label class="form-label"><strong>Cliente *</strong></label>
+                        <select name="cliente_id" class="form-select" required>
+                            <option value="">-- Selecione o cliente --</option>
+                            {% for cliente in clientes %}
+                            <option value="{{ cliente.id }}">
+                                {{ cliente.nome }}{% if cliente.cnpj %} ({{ cliente.cnpj }}){% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if not clientes %}
+                        <div class="form-text text-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            Todos os clientes ativos já possuem SLA personalizado.
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <div class="alert alert-info mb-4">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Horário Administrativo:</strong> 08:00 às 17:00 (Segunda a Sexta)
+                        <br><small>Os tempos são em horas úteis. Valores do SLA padrão mostrados como referência.</small>
+                    </div>
+
+                    <table class="table table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 20%">Prioridade</th>
+                                <th style="width: 25%">Tempo Resposta (h)</th>
+                                <th style="width: 25%">Tempo Resolução (h)</th>
+                                <th style="width: 30%">SLA Padrão (referência)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="badge badge-prioridade-critica fs-6">Crítica</span></td>
+                                <td><input type="number" name="critica_resposta" class="form-control" min="1" max="999" required
+                                           value="{{ sla.critica_resposta_horas if sla else sla_padrao['critica'].tempo_resposta_horas }}"></td>
+                                <td><input type="number" name="critica_resolucao" class="form-control" min="1" max="999" required
+                                           value="{{ sla.critica_resolucao_horas if sla else sla_padrao['critica'].tempo_resolucao_horas }}"></td>
+                                <td class="text-muted small align-middle">Resp: {{ sla_padrao['critica'].tempo_resposta_horas }}h / Resol: {{ sla_padrao['critica'].tempo_resolucao_horas }}h</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge badge-prioridade-alta fs-6">Alta</span></td>
+                                <td><input type="number" name="alta_resposta" class="form-control" min="1" max="999" required
+                                           value="{{ sla.alta_resposta_horas if sla else sla_padrao['alta'].tempo_resposta_horas }}"></td>
+                                <td><input type="number" name="alta_resolucao" class="form-control" min="1" max="999" required
+                                           value="{{ sla.alta_resolucao_horas if sla else sla_padrao['alta'].tempo_resolucao_horas }}"></td>
+                                <td class="text-muted small align-middle">Resp: {{ sla_padrao['alta'].tempo_resposta_horas }}h / Resol: {{ sla_padrao['alta'].tempo_resolucao_horas }}h</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge badge-prioridade-media fs-6">Média</span></td>
+                                <td><input type="number" name="media_resposta" class="form-control" min="1" max="999" required
+                                           value="{{ sla.media_resposta_horas if sla else sla_padrao['media'].tempo_resposta_horas }}"></td>
+                                <td><input type="number" name="media_resolucao" class="form-control" min="1" max="999" required
+                                           value="{{ sla.media_resolucao_horas if sla else sla_padrao['media'].tempo_resolucao_horas }}"></td>
+                                <td class="text-muted small align-middle">Resp: {{ sla_padrao['media'].tempo_resposta_horas }}h / Resol: {{ sla_padrao['media'].tempo_resolucao_horas }}h</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge badge-prioridade-baixa fs-6">Baixa</span></td>
+                                <td><input type="number" name="baixa_resposta" class="form-control" min="1" max="999" required
+                                           value="{{ sla.baixa_resposta_horas if sla else sla_padrao['baixa'].tempo_resposta_horas }}"></td>
+                                <td><input type="number" name="baixa_resolucao" class="form-control" min="1" max="999" required
+                                           value="{{ sla.baixa_resolucao_horas if sla else sla_padrao['baixa'].tempo_resolucao_horas }}"></td>
+                                <td class="text-muted small align-middle">Resp: {{ sla_padrao['baixa'].tempo_resposta_horas }}h / Resol: {{ sla_padrao['baixa'].tempo_resolucao_horas }}h</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    {% if sla %}
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" name="ativo" value="1" class="form-check-input" id="ativo"
+                                   {% if sla.ativo %}checked{% endif %}>
+                            <label class="form-check-label" for="ativo">SLA Ativo</label>
+                        </div>
+                        <div class="form-text">Desativar faz o cliente usar o SLA padrão sem perder a configuração.</div>
+                    </div>
+                    {% endif %}
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> {{ 'Salvar' if sla else 'Criar' }}
+                        </button>
+                        <a href="{{ url_for('users.sla_clientes') }}" class="btn btn-outline-secondary">Cancelar</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-question-circle"></i> Ajuda</h5>
+            </div>
+            <div class="card-body">
+                <h6>Como funciona?</h6>
+                <p class="small text-muted">
+                    O SLA personalizado substitui o SLA padrão para todos os chamados
+                    abertos por usuários vinculados a este cliente.
+                </p>
+
+                <h6>Tempo de Resposta</h6>
+                <p class="small text-muted">
+                    Tempo máximo para a primeira interação do atendente com o chamado.
+                </p>
+
+                <h6>Tempo de Resolução</h6>
+                <p class="small text-muted">
+                    Tempo máximo para resolver completamente o chamado.
+                </p>
+
+                <hr>
+
+                <h6>Referência de Horas</h6>
+                <table class="table table-sm small">
+                    <tr><td>4 horas</td><td>Meio dia</td></tr>
+                    <tr><td>9 horas</td><td>1 dia útil</td></tr>
+                    <tr><td>18 horas</td><td>2 dias úteis</td></tr>
+                    <tr><td>45 horas</td><td>1 semana</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

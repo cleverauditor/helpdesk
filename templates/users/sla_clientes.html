@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}SLA por Cliente - Sistemas MaxVia{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-building-check"></i> SLA por Cliente</h2>
+    <div>
+        <a href="{{ url_for('users.criar_sla_cliente') }}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> Novo SLA
+        </a>
+        <a href="{{ url_for('users.sla_config') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> SLA Padrão
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i>
+    Clientes com SLA personalizado usarão estes tempos no lugar do SLA padrão.
+    Clientes sem configuração aqui usarão o <a href="{{ url_for('users.sla_config') }}">SLA padrão</a>.
+</div>
+
+{% if sla_list %}
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Cliente</th>
+                        <th class="text-center">
+                            <span class="badge badge-prioridade-critica">Critica</span><br>
+                            <small class="text-muted">Resp / Resol</small>
+                        </th>
+                        <th class="text-center">
+                            <span class="badge badge-prioridade-alta">Alta</span><br>
+                            <small class="text-muted">Resp / Resol</small>
+                        </th>
+                        <th class="text-center">
+                            <span class="badge badge-prioridade-media">Media</span><br>
+                            <small class="text-muted">Resp / Resol</small>
+                        </th>
+                        <th class="text-center">
+                            <span class="badge badge-prioridade-baixa">Baixa</span><br>
+                            <small class="text-muted">Resp / Resol</small>
+                        </th>
+                        <th class="text-center">Status</th>
+                        <th class="text-center">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sla in sla_list %}
+                    <tr>
+                        <td>
+                            <strong>{{ sla.cliente.nome }}</strong>
+                            {% if sla.cliente.cnpj %}
+                            <br><small class="text-muted">{{ sla.cliente.cnpj }}</small>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">{{ sla.critica_resposta_horas }}h / {{ sla.critica_resolucao_horas }}h</td>
+                        <td class="text-center">{{ sla.alta_resposta_horas }}h / {{ sla.alta_resolucao_horas }}h</td>
+                        <td class="text-center">{{ sla.media_resposta_horas }}h / {{ sla.media_resolucao_horas }}h</td>
+                        <td class="text-center">{{ sla.baixa_resposta_horas }}h / {{ sla.baixa_resolucao_horas }}h</td>
+                        <td class="text-center">
+                            {% if sla.ativo %}
+                            <span class="badge bg-success">Ativo</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Inativo</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <a href="{{ url_for('users.editar_sla_cliente', id=sla.id) }}"
+                               class="btn btn-sm btn-outline-primary" title="Editar">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <form method="POST" action="{{ url_for('users.excluir_sla_cliente', id=sla.id) }}"
+                                  class="d-inline" onsubmit="return confirm('Remover SLA personalizado de {{ sla.cliente.nome }}? Será usado o SLA padrão.')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-building text-muted" style="font-size: 3rem;"></i>
+        <h5 class="mt-3 text-muted">Nenhum SLA personalizado configurado</h5>
+        <p class="text-muted">Todos os clientes estão usando o SLA padrão.</p>
+        <a href="{{ url_for('users.criar_sla_cliente') }}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> Configurar SLA para um Cliente
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

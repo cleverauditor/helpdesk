@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from functools import wraps
-from models import db, User, Category, SLAConfig, Cliente, atendente_categoria
+from models import db, User, Category, SLAConfig, SLACliente, Cliente, atendente_categoria
 
 users_bp = Blueprint('users', __name__, url_prefix='/usuarios')
 
@@ -139,16 +139,19 @@ def criar():
 
         # Buscar nome da empresa pelo cliente selecionado
         empresa = None
+        user_cliente_id = None
         if tipo == 'cliente_externo' and cliente_id:
             cliente = Cliente.query.get(cliente_id)
             if cliente:
                 empresa = cliente.nome
+                user_cliente_id = cliente.id
 
         user = User(
             nome=nome,
             email=email,
             tipo=tipo,
             empresa=empresa,
+            cliente_id=user_cliente_id,
             departamento=departamento,
             telefone=telefone
         )
@@ -218,10 +221,13 @@ def editar(id):
             if cliente_id:
                 cliente = Cliente.query.get(cliente_id)
                 user.empresa = cliente.nome if cliente else None
+                user.cliente_id = cliente.id if cliente else None
             else:
                 user.empresa = None
+                user.cliente_id = None
         else:
             user.empresa = None
+            user.cliente_id = None
 
         nova_senha = request.form.get('senha', '')
         if nova_senha and len(nova_senha) >= 6:
@@ -390,3 +396,97 @@ def atualizar_sla():
     flash('Configurações de SLA atualizadas com sucesso!', 'success')
 
     return redirect(url_for('users.sla_config'))
+
+
+# Rotas de SLA por Cliente
+@users_bp.route('/sla-clientes')
+@login_required
+@admin_required
+def sla_clientes():
+    sla_list = SLACliente.query.join(Cliente).order_by(Cliente.nome).all()
+    return render_template('users/sla_clientes.html', sla_list=sla_list)
+
+
+@users_bp.route('/sla-clientes/criar', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def criar_sla_cliente():
+    # Clientes que ainda não têm SLA personalizado
+    clientes_com_sla = db.session.query(SLACliente.cliente_id).subquery()
+    clientes = Cliente.query.filter(
+        Cliente.ativo == True,
+        ~Cliente.id.in_(clientes_com_sla)
+    ).order_by(Cliente.nome).all()
+
+    # SLA padrão para preencher os campos
+    sla_padrao = {s.prioridade: s for s in SLAConfig.query.all()}
+
+    if request.method == 'POST':
+        cliente_id = request.form.get('cliente_id', type=int)
+        if not cliente_id:
+            flash('Selecione um cliente.', 'danger')
+            return render_template('users/sla_cliente_form.html',
+                                   sla=None, clientes=clientes, sla_padrao=sla_padrao)
+
+        # Verificar se já existe
+        if SLACliente.query.filter_by(cliente_id=cliente_id).first():
+            flash('Este cliente já possui SLA personalizado.', 'danger')
+            return redirect(url_for('users.sla_clientes'))
+
+        sla_cliente = SLACliente(
+            cliente_id=cliente_id,
+            critica_resposta_horas=request.form.get('critica_resposta', 1, type=int),
+            critica_resolucao_horas=request.form.get('critica_resolucao', 4, type=int),
+            alta_resposta_horas=request.form.get('alta_resposta', 2, type=int),
+            alta_resolucao_horas=request.form.get('alta_resolucao', 8, type=int),
+            media_resposta_horas=request.form.get('media_resposta', 4, type=int),
+            media_resolucao_horas=request.form.get('media_resolucao', 24, type=int),
+            baixa_resposta_horas=request.form.get('baixa_resposta', 8, type=int),
+            baixa_resolucao_horas=request.form.get('baixa_resolucao', 48, type=int),
+        )
+        db.session.add(sla_cliente)
+        db.session.commit()
+
+        flash(f'SLA personalizado criado para {sla_cliente.cliente.nome}!', 'success')
+        return redirect(url_for('users.sla_clientes'))
+
+    return render_template('users/sla_cliente_form.html',
+                           sla=None, clientes=clientes, sla_padrao=sla_padrao)
+
+
+@users_bp.route('/sla-clientes/<int:id>/editar', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def editar_sla_cliente(id):
+    sla = SLACliente.query.get_or_404(id)
+
+    if request.method == 'POST':
+        sla.critica_resposta_horas = request.form.get('critica_resposta', 1, type=int)
+        sla.critica_resolucao_horas = request.form.get('critica_resolucao', 4, type=int)
+        sla.alta_resposta_horas = request.form.get('alta_resposta', 2, type=int)
+        sla.alta_resolucao_horas = request.form.get('alta_resolucao', 8, type=int)
+        sla.media_resposta_horas = request.form.get('media_resposta', 4, type=int)
+        sla.media_resolucao_horas = request.form.get('media_resolucao', 24, type=int)
+        sla.baixa_resposta_horas = request.form.get('baixa_resposta', 8, type=int)
+        sla.baixa_resolucao_horas = request.form.get('baixa_resolucao', 48, type=int)
+        sla.ativo = request.form.get('ativo') == '1'
+
+        db.session.commit()
+        flash(f'SLA de {sla.cliente.nome} atualizado!', 'success')
+        return redirect(url_for('users.sla_clientes'))
+
+    sla_padrao = {s.prioridade: s for s in SLAConfig.query.all()}
+    return render_template('users/sla_cliente_form.html',
+                           sla=sla, clientes=[], sla_padrao=sla_padrao)
+
+
+@users_bp.route('/sla-clientes/<int:id>/excluir', methods=['POST'])
+@login_required
+@admin_required
+def excluir_sla_cliente(id):
+    sla = SLACliente.query.get_or_404(id)
+    nome = sla.cliente.nome
+    db.session.delete(sla)
+    db.session.commit()
+    flash(f'SLA personalizado de {nome} removido. Será usado o SLA padrão.', 'success')
+    return redirect(url_for('users.sla_clientes'))
